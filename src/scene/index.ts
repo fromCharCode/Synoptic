@@ -1,0 +1,5 @@
+export { createSceneManager } from './SceneManager'
+export type { SceneManager } from './SceneManager'
+export { STYLES, createMainMaterial, createWireMaterial, createInnerMaterial, createParticleMaterial } from './MaterialFactory'
+export { createFresnelMaterial } from './FresnelMaterial'
+export type { FresnelUniforms } from './FresnelMaterial'

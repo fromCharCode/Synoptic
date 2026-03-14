@@ -7,7 +7,7 @@ describe('AudioAnalyser', () => {
     it('has 8 bands', () => expect(BANDS).toHaveLength(8))
     it('covers 20Hz to 20kHz', () => {
       expect(BANDS[0].lo).toBe(20)
-      expect(BANDS[BANDS.length - 1].hi).toBe(20000)
+      expect(BANDS[BANDS.length - 1]!.hi).toBe(20000)
     })
   })
 
