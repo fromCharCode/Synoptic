@@ -1,0 +1,10 @@
+/* Synoptik — Placeholder styles, will be populated from prototype */
+:root {
+  --bg: #08080e;
+  --fg: rgba(255, 255, 255, 0.82);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); overflow: hidden; }
+canvas#gl { display: block; position: fixed; top: 0; left: 0; z-index: 0; }
+canvas#ring { position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; }
