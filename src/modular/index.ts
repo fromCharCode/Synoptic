@@ -1,0 +1,7 @@
+export { createLFO } from './LFO'
+export type { LFO } from './LFO'
+export { createEnvelope } from './EnvelopeFollower'
+export type { Envelope } from './EnvelopeFollower'
+export { createPatchbay } from './Patchbay'
+export { createMacro } from './Macros'
+export type { Macro } from './Macros'
