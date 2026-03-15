@@ -12,7 +12,8 @@ export interface SpotifyPlayer {
 }
 
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID as string
-const REDIRECT_URI = `${window.location.origin}/callback`
+// Force https:// for Spotify redirect (dashboard requires https://localhost:5173/callback)
+const REDIRECT_URI = `https://${window.location.host}/callback`
 const SCOPES = 'streaming user-read-playback-state user-modify-playback-state'
 
 function generateRandomString(length: number): string {

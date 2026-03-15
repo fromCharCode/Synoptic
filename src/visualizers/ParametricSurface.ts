@@ -244,7 +244,7 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
   }
 
   const viz: Visualizer = {
-    id: 'parametric-surface',
+    id: 'parametricSurface',
     name: 'Parametrische Fläche',
     category: 'surface',
     description: '9 parametrische Topologien mit Smoothstep-Morphing',
