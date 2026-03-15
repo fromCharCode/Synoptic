@@ -82,33 +82,13 @@ function loadIframeAPI(): Promise<YTNamespace> {
 }
 
 async function tryTabCapture(audioEngine: AudioEngine, bus: Bus): Promise<void> {
+  // Use the standard tab capture method — works in Firefox and Chrome.
+  // The user will be prompted to select a tab/window, then audio is
+  // routed through analyser AND to speakers.
   try {
-    const mediaDevices = navigator.mediaDevices
-    // preferCurrentTab is only available in some browsers — use dynamic access
-    const constraints: DisplayMediaStreamOptions = {
-      audio: true,
-      video: false,
-    }
-    // Chrome-specific: prefer current tab
-    const constraintsWithPref = constraints as DisplayMediaStreamOptions & {
-      preferCurrentTab?: boolean
-    }
-    constraintsWithPref.preferCurrentTab = true
-
-    const displayStream = await mediaDevices.getDisplayMedia(constraintsWithPref)
-    // Stop video tracks if any were returned despite video:false
-    displayStream.getVideoTracks().forEach(t => t.stop())
-
-    const audioTracks = displayStream.getAudioTracks()
-    if (audioTracks.length === 0) {
-      bus.emit('error', { source: 'youtube', message: 'Kein Audio im Tab-Capture' })
-      return
-    }
-    const audioStream = new MediaStream(audioTracks)
-    audioEngine.connectSpotify(audioStream) // reuse same connectSpotify for stream-based input
-    bus.emit('audio:connected', { mode: 'tab' })
+    await audioEngine.connectTabCapture()
   } catch {
-    bus.emit('error', { source: 'youtube', message: 'Tab-Audio-Capture fehlgeschlagen — bitte manuell Tab Audio verbinden' })
+    bus.emit('error', { source: 'youtube', message: 'Tab-Audio-Capture fehlgeschlagen — bitte manuell über Audio Tab verbinden' })
   }
 }
 
