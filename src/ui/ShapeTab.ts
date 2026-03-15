@@ -78,7 +78,7 @@ export function ShapeTab({
   onVizToggle,
   onStyle,
 }: ShapeTabProps) {
-  const isParametricSurface = visualizerId === 'parametric-surface'
+  const isParametricSurface = visualizerId === 'parametricSurface'
   const topology = vizParams['topology'] ?? 0
   const topoInfo = getTopologyInfo(topology)
   const topoIndex = Math.floor(topology / 100)
@@ -128,6 +128,40 @@ export function ShapeTab({
           />
         `)}
       `}
+
+      <${Section} title="Farbe" />
+      <${Slider} label="Hue Shift" value=${vizParams['hueShift'] ?? 0} min=${0} max=${360} step=${1}
+        onChange=${(v: number) => onVizParam('hueShift', v)} />
+      <${Slider} label="Sättigung" value=${vizParams['saturation'] ?? 100} min=${0} max=${200} step=${1}
+        onChange=${(v: number) => onVizParam('saturation', v)} />
+      <${Slider} label="Helligkeit" value=${vizParams['brightness'] ?? 100} min=${0} max=${200} step=${1}
+        onChange=${(v: number) => onVizParam('brightness', v)} />
+      <${Slider} label="Emissive Int." value=${vizParams['emissiveInt'] ?? 50} min=${0} max=${100} step=${1}
+        onChange=${(v: number) => onVizParam('emissiveInt', v)} />
+      <${Slider} label="Emissive Hue" value=${vizParams['emissiveHue'] ?? 0} min=${0} max=${360} step=${1}
+        onChange=${(v: number) => onVizParam('emissiveHue', v)} />
+
+      <${Section} title="Material" />
+      <${Slider} label="Fresnel" value=${vizParams['fresnelStrength'] ?? 60} min=${0} max=${100} step=${1}
+        onChange=${(v: number) => onVizParam('fresnelStrength', v)} />
+      <${Slider} label="Fresnel Hue" value=${vizParams['fresnelHue'] ?? 0} min=${0} max=${360} step=${1}
+        onChange=${(v: number) => onVizParam('fresnelHue', v)} />
+      <${Slider} label="Metalness" value=${vizParams['metalness'] ?? 10} min=${0} max=${100} step=${1}
+        onChange=${(v: number) => onVizParam('metalness', v)} />
+      <${Slider} label="Roughness" value=${vizParams['roughness'] ?? 5} min=${0} max=${100} step=${1}
+        onChange=${(v: number) => onVizParam('roughness', v)} />
+      <${Slider} label="Opacity" value=${vizParams['opacity'] ?? 100} min=${0} max=${100} step=${1}
+        onChange=${(v: number) => onVizParam('opacity', v)} />
+
+      <${Section} title="Szene" />
+      <${Slider} label="Fog Dichte" value=${vizParams['fogDensity'] ?? 15} min=${0} max=${50} step=${1}
+        onChange=${(v: number) => onVizParam('fogDensity', v)} />
+      <${Slider} label="Cam Distanz" value=${vizParams['camDistance'] ?? 80} min=${30} max=${200} step=${1}
+        onChange=${(v: number) => onVizParam('camDistance', v)} />
+      <${Slider} label="Exposure" value=${vizParams['exposure'] ?? 130} min=${50} max=${300} step=${1}
+        onChange=${(v: number) => onVizParam('exposure', v)} />
+      <${Slider} label="BG Hue" value=${vizParams['bgHue'] ?? 0} min=${0} max=${360} step=${1}
+        onChange=${(v: number) => onVizParam('bgHue', v)} />
 
     </div>
   `

@@ -551,6 +551,32 @@ export function createApp(canvas: HTMLCanvasElement): App {
     // Sync style on scene manager
     styleId = state.style
 
+    // Apply color/material/scene params from Form Tab to sceneManager
+    const vp = state.vizParams
+    if (vp['hueShift'] !== undefined || vp['saturation'] !== undefined || vp['brightness'] !== undefined) {
+      const hueShift = (vp['hueShift'] ?? 0) / 360
+      const satMult = (vp['saturation'] ?? 100) / 100
+      const brtMult = (vp['brightness'] ?? 100) / 100
+      const emissiveInt = (vp['emissiveInt'] ?? 50) / 100
+      const emissiveHue = (vp['emissiveHue'] ?? 0) / 360
+      const fresnelStr = (vp['fresnelStrength'] ?? 60) / 100
+      const fresnelHue = (vp['fresnelHue'] ?? 0) / 360
+      const metalness = (vp['metalness'] ?? 10) / 100
+      const roughness = (vp['roughness'] ?? 5) / 100
+      const opacity = (vp['opacity'] ?? 100) / 100
+      const fogDensity = (vp['fogDensity'] ?? 15) / 1000
+      const camDist = (vp['camDistance'] ?? 80) / 10
+      const exposure = (vp['exposure'] ?? 130) / 100
+      const bgHueVal = (vp['bgHue'] ?? 0) / 360
+
+      // Apply to scene directly (these are base values, patchbay adds modulation on top)
+      sceneManager.renderer.toneMappingExposure = exposure
+      const fog = sceneManager.scene.fog
+      if (fog && 'density' in fog) {
+        (fog as { density: number }).density = fogDensity
+      }
+    }
+
     // Switch visualizer if changed
     if (state.activeVisualizer !== activeVisualizer.id) {
       switchVisualizer(state.activeVisualizer)

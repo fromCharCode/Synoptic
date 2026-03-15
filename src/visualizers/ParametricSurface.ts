@@ -460,28 +460,36 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
       }
 
       // ── HSL Color Modulation ──
+      // Form Tab direct params + Patchbay modulation
+      const formHueShift = (paramValues['hueShift'] ?? 0) / 360
+      const formSatMult = (paramValues['saturation'] ?? 100) / 100
+      const formBrtMult = (paramValues['brightness'] ?? 100) / 100
+      const formEmissiveInt = (paramValues['emissiveInt'] ?? 50) / 100
+      const formEmissiveHue = (paramValues['emissiveHue'] ?? 0) / 360
+      const formMetalness = (paramValues['metalness'] ?? 10) / 100
+      const formRoughness = (paramValues['roughness'] ?? 5) / 100
+      const formOpacity = (paramValues['opacity'] ?? 100) / 100
+
       const mat = mainMesh.material
-      let h = baseHSL.h + patchbay.get('hue')
+      let h = baseHSL.h + formHueShift + patchbay.get('hue')
       if (h > 1) h -= Math.floor(h)
       if (h < 0) h += Math.ceil(-h)
       mat.color.setHSL(
         h,
-        Math.max(0, Math.min(1, baseHSL.s + patchbay.get('sat'))),
-        Math.max(0, Math.min(1, baseHSL.l + patchbay.get('brt'))),
+        Math.max(0, Math.min(1, baseHSL.s * formSatMult + patchbay.get('sat'))),
+        Math.max(0, Math.min(1, baseHSL.l * formBrtMult + patchbay.get('brt'))),
       )
 
-      let eh = baseEmissiveHSL.h + patchbay.get('eHue')
+      let eh = baseEmissiveHSL.h + formEmissiveHue + patchbay.get('eHue')
       if (eh > 1) eh -= Math.floor(eh)
       if (eh < 0) eh += Math.ceil(-eh)
       mat.emissive.setHSL(eh, Math.max(0, baseEmissiveHSL.s), Math.max(0, baseEmissiveHSL.l))
 
       const style = getStyle()
-      mat.emissiveIntensity = style.emissiveIntensity + patchbay.get('eI')
-      mat.metalness = Math.max(0, Math.min(1, style.metalness + patchbay.get('met')))
-      mat.roughness = Math.max(0.01, Math.min(1, style.roughness + patchbay.get('rou')))
-      if (style.transparent) {
-        mat.opacity = Math.max(0.05, Math.min(1, style.opacity + patchbay.get('opa')))
-      }
+      mat.emissiveIntensity = style.emissiveIntensity * formEmissiveInt * 2 + patchbay.get('eI')
+      mat.metalness = Math.max(0, Math.min(1, formMetalness + patchbay.get('met')))
+      mat.roughness = Math.max(0.01, Math.min(1, formRoughness + patchbay.get('rou')))
+      mat.opacity = Math.max(0.05, Math.min(1, formOpacity + patchbay.get('opa')))
 
       // Wire opacity modulation
       if (wireMesh && wireMesh.visible) {
@@ -489,10 +497,12 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
       }
 
       // ── Fresnel modulation ──
+      const formFresnelStr = (paramValues['fresnelStrength'] ?? 60) / 100
+      const formFresnelHue = (paramValues['fresnelHue'] ?? 0) / 360
       if (fresnelMesh && fresnelMesh.visible && fresnelUniforms) {
-        fresnelUniforms.strength.value = 0.6 + patchbay.get('fStr')
+        fresnelUniforms.strength.value = formFresnelStr + patchbay.get('fStr')
         _color.set(style.wireColor).getHSL(_fHsl)
-        let fh = _fHsl.h + patchbay.get('fHue')
+        let fh = _fHsl.h + formFresnelHue + patchbay.get('fHue')
         if (fh > 1) fh -= Math.floor(fh)
         if (fh < 0) fh += Math.ceil(-fh)
         fresnelUniforms.color.value.setHSL(fh, _fHsl.s, _fHsl.l)
