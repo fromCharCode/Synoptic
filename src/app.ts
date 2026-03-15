@@ -96,7 +96,7 @@ const SHARED_DESTINATIONS: Destination[] = [
   // Camera
   { id: 'cDist', label: 'Cam Distance', group: 'Camera', defaultSource: 'none', defaultAmount: 0, min: -4, max: 8, colorIndex: 6 },
   { id: 'cShk', label: 'Cam Shake', group: 'Camera', defaultSource: 'none', defaultAmount: 0, min: 0, max: 0.5, colorIndex: 6 },
-  { id: 'camFov', label: 'FOV', group: 'Camera', defaultSource: 'none', defaultAmount: 0, min: -15, max: 30, colorIndex: 6 },
+  { id: 'camFov', label: 'FOV', group: 'Camera', defaultSource: 'none', defaultAmount: 0, min: -30, max: 30, colorIndex: 6 },
   // Scene
   { id: 'fog', label: 'Fog', group: 'Scene', defaultSource: 'none', defaultAmount: 0, min: -0.01, max: 0.03, colorIndex: 6 },
   { id: 'exp', label: 'Exposure', group: 'Scene', defaultSource: 'none', defaultAmount: 0, min: -0.5, max: 1, colorIndex: 6 },
@@ -114,7 +114,8 @@ const SHARED_DESTINATIONS: Destination[] = [
   { id: 'vig', label: 'Vignette', group: 'Post-FX', defaultSource: 'none', defaultAmount: 0, min: 0, max: 1, colorIndex: 4 },
   // Clip plane + particle size
   { id: 'clS', label: 'Clip Speed', group: 'Scene', defaultSource: 'none', defaultAmount: 0, min: -1, max: 2, colorIndex: 6 },
-  { id: 'pSz', label: 'Particle Size', group: 'Scene', defaultSource: 'none', defaultAmount: 0, min: 0, max: 0.1, colorIndex: 5 },
+  { id: 'pSz', label: 'Particle Size', group: 'Scene', defaultSource: 'none', defaultAmount: 0, min: 0, max: 0.15, colorIndex: 5 },
+  { id: 'riO', label: 'Ring Opacity', group: 'Scene', defaultSource: 'none', defaultAmount: 0, min: 0, max: 1, colorIndex: 5 },
 ]
 
 // Map of visualizer id -> its exported destinations
@@ -206,6 +207,19 @@ export function createApp(canvas: HTMLCanvasElement): App {
   fxChain.addPass(createEdgeDetectPass())
   fxChain.addPass(createASCIIPass())
   fxChain.addPass(createCRTPass())
+
+  // Register FX params as patchbay destinations
+  const fxDests: Destination[] = fxChain.getParams().map(p => ({
+    id: p.id,
+    label: p.label,
+    group: 'Post-FX',
+    defaultSource: 'none',
+    defaultAmount: 50,
+    min: 0,
+    max: p.max,
+    colorIndex: 7,
+  }))
+  patchbay.registerDestinations(fxDests)
 
   // ── Spectrum Ring (2D overlay) ──
   const ringCanvas = document.getElementById('ring') as HTMLCanvasElement | null
@@ -627,6 +641,16 @@ export function createApp(canvas: HTMLCanvasElement): App {
 
     // Visualizer
     activeVisualizer.update(dt, patchbay)
+
+    // Apply patchbay modulation to FX params
+    for (const pass of fxChain.getPasses()) {
+      for (const param of pass.params) {
+        const mod = patchbay.get(param.id)
+        if (mod !== 0) {
+          param.value = (store.getState().fxParams[param.id] ?? param.value) + mod
+        }
+      }
+    }
 
     // Scene
     sceneManager.update(dt, patchbay, mouseX, mouseY, styleId)

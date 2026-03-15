@@ -81,6 +81,19 @@ const DESTINATIONS: Destination[] = [
   { id: 'sV', label: 'Seg V Mod', group: 'Geometry', defaultSource: 'none', defaultAmount: 0, min: -20, max: 20, colorIndex: 2 },
   { id: 'topo', label: 'Topology Mod', group: 'Geometry', defaultSource: 'none', defaultAmount: 0, min: -200, max: 200, colorIndex: 2 },
   { id: 'morphSpeed', label: 'Morph Speed', group: 'Geometry', defaultSource: 'none', defaultAmount: 0, min: -2, max: 2, colorIndex: 2 },
+  // Per-band displacement (extending dB, dM, dH)
+  { id: 'dSub', label: 'Disp Sub', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: 0, max: 0.5, colorIndex: 2 },
+  { id: 'dHM', label: 'Disp HiMid', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: 0, max: 0.2, colorIndex: 2 },
+  { id: 'dPres', label: 'Disp Pres', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: 0, max: 0.1, colorIndex: 2 },
+  { id: 'dAir', label: 'Disp Air', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: 0, max: 0.08, colorIndex: 2 },
+  // Displacement wave control
+  { id: 'dispFreq', label: 'Disp Freq', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: 0, max: 10, colorIndex: 2 },
+  { id: 'dispSpeed', label: 'Disp Speed', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: -5, max: 5, colorIndex: 2 },
+  { id: 'dispAmp', label: 'Disp Amp', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: 0, max: 2, colorIndex: 2 },
+  // Vertex noise
+  { id: 'noiseAmt', label: 'Noise', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: 0, max: 0.5, colorIndex: 2 },
+  { id: 'noiseFreq', label: 'Noise Freq', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: 0, max: 20, colorIndex: 2 },
+  { id: 'noiseSpeed', label: 'Noise Speed', group: 'Geometry', defaultSource: 'none', defaultAmount: 50, min: 0, max: 3, colorIndex: 2 },
   // Color
   { id: 'hue', label: 'Hue', group: 'Color', defaultSource: 'none', defaultAmount: 0, min: -0.5, max: 0.5, colorIndex: 3 },
   { id: 'sat', label: 'Saturation', group: 'Color', defaultSource: 'none', defaultAmount: 0, min: -0.5, max: 0.5, colorIndex: 3 },
@@ -107,7 +120,7 @@ const PARAMS: VisualizerParam[] = [
 ]
 
 const TOGGLES: VisualizerToggle[] = [
-  { id: 'wireframe', label: 'Wireframe', default: true },
+  { id: 'wireframe', label: 'Wireframe', default: false },
   { id: 'autoRotation', label: 'Auto-Rotation', default: true },
   { id: 'pulsation', label: 'Pulsation', default: true },
   { id: 'particles', label: 'Partikel', default: false },
@@ -359,13 +372,28 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
       const dB = patchbay.get('dB')
       const dM = patchbay.get('dM')
       const dH = patchbay.get('dH')
+      const dSub = patchbay.get('dSub')
+      const dHM = patchbay.get('dHM')
+      const dPres = patchbay.get('dPres')
+      const dAir = patchbay.get('dAir')
+      const dispFreq = patchbay.get('dispFreq')
+      const dispSpeed = patchbay.get('dispSpeed')
+      const dispAmp = patchbay.get('dispAmp')
+      const noiseAmt = patchbay.get('noiseAmt')
+      const noiseFreq = patchbay.get('noiseFreq')
+      const noiseSpeed = patchbay.get('noiseSpeed')
 
-      if (dB !== 0 || dM !== 0 || dH !== 0) {
+      const hasDisplacement = dB !== 0 || dM !== 0 || dH !== 0 ||
+        dSub !== 0 || dHM !== 0 || dPres !== 0 || dAir !== 0 ||
+        dispAmp !== 0 || noiseAmt !== 0
+
+      if (hasDisplacement) {
         const cU = lastSegU
         const cV = lastSegV
         const cT = lastTopology
         const pos = mainMesh.geometry.getAttribute('position') as THREE.BufferAttribute
         const norm = mainMesh.geometry.getAttribute('normal') as THREE.BufferAttribute
+        const t = elapsed
 
         for (let j = 0; j <= cV; j++) {
           for (let i = 0; i <= cU; i++) {
@@ -374,13 +402,29 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
             const u = (i / cU) * Math.PI * 2
             const v = (j / cV) * Math.PI * 2
             const p = evaluateSurface(u, v, cT)
-            const bW = Math.sin(v * 2 + elapsed * 3) * dB
-            const mW = Math.sin(u * 3 + elapsed * 5) * dM
-            const hW = Math.sin(u * 8 + v * 6 + elapsed * 8) * dH
+
+            // Original bands
+            const bW = Math.sin(v * 2 + t * 3) * dB
+            const mW = Math.sin(u * 3 + t * 5) * dM
+            const hW = Math.sin(u * 8 + v * 6 + t * 8) * dH
+
+            // Extended per-band displacement
+            const subW = Math.sin(v * 1 + t * 2) * dSub
+            const hmW = Math.sin(u * 5 + v * 3 + t * 6) * dHM
+            const prW = Math.sin(u * 10 + v * 8 + t * 10) * dPres
+            const airW = Math.sin(u * 15 + v * 12 + t * 14) * dAir
+
+            // Custom wave
+            const customW = Math.sin(u * dispFreq + v * dispFreq + t * dispSpeed) * dispAmp
+
+            // Perlin-like noise (simplex approximation using layered sines)
+            const nv = (Math.sin(u * noiseFreq + t * noiseSpeed) * Math.sin(v * noiseFreq * 0.7 + t * noiseSpeed * 1.3) +
+              Math.sin(u * noiseFreq * 2.1 + v * noiseFreq * 1.7 + t * noiseSpeed * 0.8) * 0.5) * noiseAmt
+
             const nx = norm.getX(idx)
             const ny = norm.getY(idx)
             const nz = norm.getZ(idx)
-            const d = bW + mW + hW
+            const d = bW + mW + hW + subW + hmW + prW + airW + customW + nv
             pos.setXYZ(idx, p.x + nx * d, p.y + ny * d, p.z + nz * d)
           }
         }

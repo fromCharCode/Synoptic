@@ -80,7 +80,7 @@ const DEFAULT_STATE: SynoptikState = {
   fxParams: {},
   fxEnabled: {},
   panelOpen: false,
-  activeTab: 'shape',
+  activeTab: 'Form',
 }
 
 export type Store = ReturnType<typeof createStore>
