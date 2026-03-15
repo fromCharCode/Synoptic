@@ -1,3 +1,4 @@
+import type * as THREE from 'three'
 import { createClock } from '@core/clock'
 import { createBus } from '@core/bus'
 import { createRegistry } from '@core/registry'
@@ -150,6 +151,19 @@ export function createApp(canvas: HTMLCanvasElement): App {
   // Expose audioAnalyser globally for visualizers
   Object.defineProperty(window, '__synoptikAnalyser', {
     get() { return audioAnalyser },
+    configurable: true,
+  })
+
+  // Shared vizParams/vizToggles — accessible by all visualizers via window globals
+  const sharedVizParams: Record<string, number> = {}
+  const sharedVizToggles: Record<string, boolean> = {}
+
+  Object.defineProperty(window, '__synoptikVizParams', {
+    get() { return sharedVizParams },
+    configurable: true,
+  })
+  Object.defineProperty(window, '__synoptikVizToggles', {
+    get() { return sharedVizToggles },
     configurable: true,
   })
 
@@ -537,7 +551,19 @@ export function createApp(canvas: HTMLCanvasElement): App {
       }
     }
 
-    // Sync ParametricSurface-specific params
+    // Sync vizParams/vizToggles to shared globals (all visualizers can read these)
+    const vizParamEntries = Object.entries(state.vizParams)
+    for (let i = 0; i < vizParamEntries.length; i++) {
+      const entry = vizParamEntries[i]!
+      sharedVizParams[entry[0]] = entry[1]
+    }
+    const vizToggleEntries = Object.entries(state.vizToggles)
+    for (let i = 0; i < vizToggleEntries.length; i++) {
+      const entry = vizToggleEntries[i]!
+      sharedVizToggles[entry[0]] = entry[1]
+    }
+
+    // Sync ParametricSurface-specific params (it uses setParam/setToggle/setStyle)
     if (isParametricSurface(activeVisualizer)) {
       for (const [key, value] of Object.entries(state.vizParams)) {
         activeVisualizer.setParam(key, value)
@@ -707,8 +733,16 @@ export function createApp(canvas: HTMLCanvasElement): App {
     // Scene
     sceneManager.update(dt, patchbay, mouseX, mouseY, styleId)
 
-    // Render with FX chain
-    fxChain.render(sceneManager.renderer, sceneManager.scene, sceneManager.camera)
+    // Render with FX chain — route 2D visualizers through their own scene/camera
+    const vizWith2D = activeVisualizer as Visualizer & { __scene?: THREE.Scene; __camera?: THREE.Camera }
+    const vizScene = vizWith2D.__scene
+    const vizCamera = vizWith2D.__camera
+
+    if (vizScene && vizCamera) {
+      fxChain.render(sceneManager.renderer, vizScene, vizCamera)
+    } else {
+      fxChain.render(sceneManager.renderer, sceneManager.scene, sceneManager.camera)
+    }
 
     // Spectrum Ring overlay
     if (spectrumRing) {

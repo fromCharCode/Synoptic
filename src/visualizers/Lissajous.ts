@@ -145,18 +145,22 @@ export function createLissajous(): Visualizer {
   // Ring buffer index for trail
   let writeIdx = 0
 
-  return {
+  const viz: Visualizer & { __scene: THREE.Scene | null; __camera: THREE.OrthographicCamera | null } = {
     id: 'lissajous',
     name: 'Lissajous',
     category: '2d',
     description: 'XY-Oszilloskop mit Lissajous-Figuren und Nachleucht-Spur',
     params: PARAMS,
     toggles: TOGGLES,
+    __scene: null,
+    __camera: null,
 
     init(ctx: VisualizerContext) {
       renderer = ctx.renderer
       scene = new THREE.Scene()
       camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+      viz.__scene = scene
+      viz.__camera = camera
 
       trailData = new Float32Array(TRAIL_LEN * 4).fill(0)
       trailTex = new THREE.DataTexture(
@@ -193,13 +197,34 @@ export function createLissajous(): Visualizer {
     },
 
     update(dt: number, patchbay: Patchbay) {
-      if (!renderer || !scene || !camera || !material || !trailData || !trailTex) return
+      if (!material || !trailData || !trailTex) return
       elapsed += dt
 
       // Re-check analyser each frame (may become available later)
       if (!analyser && typeof window !== 'undefined') {
         const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
         analyser = w.__synoptikAnalyser ?? null
+      }
+
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['freqX'] !== undefined) paramValues['freqX'] = vp['freqX']
+        if (vp['freqY'] !== undefined) paramValues['freqY'] = vp['freqY']
+        if (vp['phase'] !== undefined) paramValues['phase'] = vp['phase']
+        if (vp['trailLength'] !== undefined) paramValues['trailLength'] = vp['trailLength']
+        if (vp['lineWidth'] !== undefined) paramValues['lineWidth'] = vp['lineWidth']
+      }
+      if (vt) {
+        if (vt['glow'] !== undefined) toggleValues['glow'] = vt['glow']
+        if (vt['fade'] !== undefined) toggleValues['fade'] = vt['fade']
+        if (vt['multiColor'] !== undefined) toggleValues['multiColor'] = vt['multiColor']
       }
 
       const freqX = (paramValues['freqX'] ?? 3) + patchbay.get('ljFreqX')
@@ -245,17 +270,18 @@ export function createLissajous(): Visualizer {
       trailTex.image.data = ordered
       trailTex.needsUpdate = true
 
+      const hueShift = vp ? ((vp['hueShift'] ?? 0) / 360) : 0
+
       const u = material.uniforms
       u['uTrailLen']!.value  = Math.min(trailLen, TRAIL_LEN)
       u['uLineWidth']!.value = paramValues['lineWidth'] ?? 3
-      u['uHue']!.value       = patchbay.get('ljHue')
+      u['uHue']!.value       = hueShift + patchbay.get('ljHue')
       u['uGlow']!.value      = Math.max(0, 1.0 + patchbay.get('ljGlow'))
       u['uGlowEnabled']!.value = toggleValues['glow'] ?? true
       u['uFade']!.value      = toggleValues['fade'] ?? true
       u['uMultiColor']!.value = toggleValues['multiColor'] ?? false
       u['uTime']!.value      = elapsed
-
-      renderer.render(scene, camera)
+      // 2D visualizer: don't render here — main pipeline renders __scene/__camera
     },
 
     resize(_w: number, _h: number) { void _w; void _h },
@@ -267,10 +293,13 @@ export function createLissajous(): Visualizer {
       if (scene && mesh) scene.remove(mesh)
       mesh = null; material = null; trailTex = null
       trailData = null; scene = null; camera = null; renderer = null
+      viz.__scene = null; viz.__camera = null
     },
 
     setOpacity(opacity: number) {
       if (material) material.uniforms['uOpacity']!.value = opacity
     },
   }
+
+  return viz
 }

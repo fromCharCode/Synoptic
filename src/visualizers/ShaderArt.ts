@@ -250,18 +250,22 @@ export function createShaderArt(): Visualizer {
   let analyser: AudioAnalyser | null = null
   let elapsed = 0
 
-  return {
+  const viz: Visualizer & { __scene: THREE.Scene | null; __camera: THREE.OrthographicCamera | null } = {
     id: 'shader-art',
     name: 'Shader Art',
     category: '2d',
     description: 'Generative Shader-Muster: Voronoi, Plasma, Fractal Flame, Reaction Diffusion',
     params: PARAMS,
     toggles: TOGGLES,
+    __scene: null,
+    __camera: null,
 
     init(ctx: VisualizerContext) {
       renderer = ctx.renderer
       scene = new THREE.Scene()
       camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+      viz.__scene = scene
+      viz.__camera = camera
 
       material = new THREE.ShaderMaterial({
         vertexShader: VERT,
@@ -293,13 +297,32 @@ export function createShaderArt(): Visualizer {
     },
 
     update(dt: number, patchbay: Patchbay) {
-      if (!renderer || !scene || !camera || !material) return
+      if (!material) return
       elapsed += dt
 
       // Re-check analyser each frame (may become available later)
       if (!analyser && typeof window !== 'undefined') {
         const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
         analyser = w.__synoptikAnalyser ?? null
+      }
+
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['pattern'] !== undefined) paramValues['pattern'] = vp['pattern']
+        if (vp['speed'] !== undefined) paramValues['speed'] = vp['speed']
+        if (vp['complexity'] !== undefined) paramValues['complexity'] = vp['complexity']
+        if (vp['zoom'] !== undefined) paramValues['zoom'] = vp['zoom']
+      }
+      if (vt) {
+        if (vt['audioReactive'] !== undefined) toggleValues['audioReactive'] = vt['audioReactive']
+        if (vt['colorCycle'] !== undefined) toggleValues['colorCycle'] = vt['colorCycle']
       }
 
       // Get audio energy
@@ -309,19 +332,20 @@ export function createShaderArt(): Visualizer {
         audioEnergy = analysis.energy
       }
 
+      const hueShift = vp ? ((vp['hueShift'] ?? 0) / 360) : 0
+
       const u = material.uniforms
       u['uPattern']!.value       = Math.round(paramValues['pattern'] ?? 0)
       u['uTime']!.value          = elapsed
       u['uSpeed']!.value         = Math.max(0, (paramValues['speed'] ?? 30) / 100 + patchbay.get('saSpeed'))
       u['uComplexity']!.value    = Math.max(0, Math.min(1, (paramValues['complexity'] ?? 40) / 100 + patchbay.get('saComplexity')))
       u['uZoom']!.value          = Math.max(0.1, (paramValues['zoom'] ?? 100) / 100 + patchbay.get('saZoom'))
-      u['uHue']!.value           = patchbay.get('saHue')
+      u['uHue']!.value           = hueShift + patchbay.get('saHue')
       u['uDistort']!.value       = Math.max(0, patchbay.get('saDistort'))
       u['uAudio']!.value         = audioEnergy
       u['uAudioReactive']!.value = toggleValues['audioReactive'] ?? true
       u['uColorCycle']!.value    = toggleValues['colorCycle'] ?? false
-
-      renderer.render(scene, camera)
+      // 2D visualizer: don't render here — main pipeline renders __scene/__camera
     },
 
     resize(_w: number, _h: number) { void _w; void _h },
@@ -331,10 +355,13 @@ export function createShaderArt(): Visualizer {
       material?.dispose()
       if (scene && mesh) scene.remove(mesh)
       mesh = null; material = null; scene = null; camera = null; renderer = null
+      viz.__scene = null; viz.__camera = null
     },
 
     setOpacity(opacity: number) {
       if (material) material.uniforms['uOpacity']!.value = opacity
     },
   }
+
+  return viz
 }

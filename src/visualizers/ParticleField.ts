@@ -184,6 +184,28 @@ export function createParticleField(): Visualizer {
       if (!mesh) return
       elapsed += dt
 
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['count'] !== undefined) paramValues['count'] = vp['count']
+        if (vp['size'] !== undefined) paramValues['size'] = vp['size']
+        if (vp['speed'] !== undefined) paramValues['speed'] = vp['speed']
+        if (vp['spread'] !== undefined) paramValues['spread'] = vp['spread']
+        if (vp['gravity'] !== undefined) paramValues['gravity'] = vp['gravity']
+        if (vp['turbulence'] !== undefined) paramValues['turbulence'] = vp['turbulence']
+      }
+      if (vt) {
+        if (vt['trails'] !== undefined) toggleValues['trails'] = vt['trails']
+        if (vt['colorByVelocity'] !== undefined) toggleValues['colorByVelocity'] = vt['colorByVelocity']
+        if (vt['audioForces'] !== undefined) toggleValues['audioForces'] = vt['audioForces']
+      }
+
       const uniforms = mesh.material.uniforms
 
       const sizeParam   = (paramValues['size'] ?? 30) / 100 * 3

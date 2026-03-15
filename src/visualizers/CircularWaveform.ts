@@ -149,18 +149,22 @@ export function createCircularWaveform(): Visualizer {
   let elapsed = 0
   let rotation = 0
 
-  return {
+  const viz: Visualizer & { __scene: THREE.Scene | null; __camera: THREE.OrthographicCamera | null } = {
     id: 'circular-waveform',
     name: 'Circular Waveform',
     category: '2d',
     description: 'Waveform als Kreis in Polarkoordinaten',
     params: PARAMS,
     toggles: TOGGLES,
+    __scene: null,
+    __camera: null,
 
     init(ctx: VisualizerContext) {
       renderer = ctx.renderer
       scene = new THREE.Scene()
       camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+      viz.__scene = scene
+      viz.__camera = camera
 
       waveformData = new Float32Array(256).fill(0.5)
       waveformTex = new THREE.DataTexture(
@@ -200,13 +204,33 @@ export function createCircularWaveform(): Visualizer {
     },
 
     update(dt: number, patchbay: Patchbay) {
-      if (!renderer || !scene || !camera || !material || !waveformData || !waveformTex) return
+      if (!material || !waveformData || !waveformTex) return
       elapsed += dt
 
       // Re-check analyser each frame (may become available later)
       if (!analyser && typeof window !== 'undefined') {
         const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
         analyser = w.__synoptikAnalyser ?? null
+      }
+
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['radius'] !== undefined) paramValues['radius'] = vp['radius']
+        if (vp['lineWidth'] !== undefined) paramValues['lineWidth'] = vp['lineWidth']
+        if (vp['layers'] !== undefined) paramValues['layers'] = vp['layers']
+        if (vp['rotationSpeed'] !== undefined) paramValues['rotationSpeed'] = vp['rotationSpeed']
+      }
+      if (vt) {
+        if (vt['fill'] !== undefined) toggleValues['fill'] = vt['fill']
+        if (vt['mirror'] !== undefined) toggleValues['mirror'] = vt['mirror']
+        if (vt['glow'] !== undefined) toggleValues['glow'] = vt['glow']
       }
 
       const rotSpeed = (paramValues['rotationSpeed'] ?? 10) / 100 * Math.PI * 2
@@ -229,20 +253,21 @@ export function createCircularWaveform(): Visualizer {
         waveformTex.needsUpdate = true
       }
 
+      const hueShift = vp ? ((vp['hueShift'] ?? 0) / 360) : 0
+
       const u = material.uniforms
       u['uRadius']!.value    = Math.max(0.1, (paramValues['radius'] ?? 55) / 100 + patchbay.get('cwRadius'))
       u['uLineWidth']!.value = Math.max(0.5, (paramValues['lineWidth'] ?? 3) + patchbay.get('cwWidth'))
       u['uLayers']!.value    = Math.max(1, Math.round(paramValues['layers'] ?? 2))
       u['uRotation']!.value  = rotation
       u['uAmplitude']!.value = Math.max(0.01, 0.15 + patchbay.get('cwAmplitude'))
-      u['uHue']!.value       = patchbay.get('cwHue')
+      u['uHue']!.value       = hueShift + patchbay.get('cwHue')
       u['uFill']!.value      = toggleValues['fill'] ?? false
       u['uMirror']!.value    = toggleValues['mirror'] ?? false
       u['uGlow']!.value      = toggleValues['glow'] ?? true
       u['uGlowAmt']!.value   = 1.0
       u['uTime']!.value      = elapsed
-
-      renderer.render(scene, camera)
+      // 2D visualizer: don't render here — main pipeline renders __scene/__camera
     },
 
     resize(_w: number, _h: number) { void _w; void _h },
@@ -254,10 +279,13 @@ export function createCircularWaveform(): Visualizer {
       if (scene && mesh) scene.remove(mesh)
       mesh = null; material = null; waveformTex = null
       waveformData = null; scene = null; camera = null; renderer = null
+      viz.__scene = null; viz.__camera = null
     },
 
     setOpacity(opacity: number) {
       if (material) material.uniforms['uOpacity']!.value = opacity
     },
   }
+
+  return viz
 }

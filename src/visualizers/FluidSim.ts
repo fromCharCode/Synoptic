@@ -252,13 +252,15 @@ export function createFluidSim(): Visualizer {
 
   function swap<T>(a: T, b: T): [T, T] { return [b, a] }
 
-  return {
+  const viz: Visualizer & { __scene: THREE.Scene | null; __camera: THREE.OrthographicCamera | null } = {
     id: 'fluid-sim',
     name: 'Fluid Simulation',
     category: '2d',
     description: '2D Navier-Stokes Fluidsimulation mit Audio-getriebenen Kräften',
     params: PARAMS,
     toggles: TOGGLES,
+    __scene: null,
+    __camera: null,
 
     init(ctx: VisualizerContext) {
       renderer = ctx.renderer
@@ -321,13 +323,15 @@ export function createFluidSim(): Visualizer {
         uOpacity: { value: 1.0 },
       })
 
-      // Display scene (renders to screen)
+      // Display scene (rendered by main pipeline via __scene/__camera)
       displayScene = new THREE.Scene()
       const displayCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
       displayMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), matDisplay)
       displayScene.add(displayMesh)
       // Store displayCam on displayScene for later use
       displayScene.userData['camera'] = displayCam
+      viz.__scene = displayScene
+      viz.__camera = displayCam
 
       if (typeof window !== 'undefined') {
         const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
@@ -347,11 +351,32 @@ export function createFluidSim(): Visualizer {
         analyser = w.__synoptikAnalyser ?? null
       }
 
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['viscosity'] !== undefined) paramValues['viscosity'] = vp['viscosity']
+        if (vp['diffusion'] !== undefined) paramValues['diffusion'] = vp['diffusion']
+        if (vp['forceRadius'] !== undefined) paramValues['forceRadius'] = vp['forceRadius']
+        if (vp['colorDecay'] !== undefined) paramValues['colorDecay'] = vp['colorDecay']
+      }
+      if (vt) {
+        if (vt['audioInject'] !== undefined) toggleValues['audioInject'] = vt['audioInject']
+        if (vt['mouseInject'] !== undefined) toggleValues['mouseInject'] = vt['mouseInject']
+        if (vt['rainbow'] !== undefined) toggleValues['rainbow'] = vt['rainbow']
+      }
+
       const effectiveDt = Math.min(dt, 0.033) * Math.max(0.1, 1.0 + patchbay.get('flSpeed'))
       const viscosity = Math.max(0, (paramValues['viscosity'] ?? 30) / 100 + patchbay.get('flViscosity'))
       const colorDecay = Math.max(0.9, 1.0 - ((paramValues['colorDecay'] ?? 20) / 100 + patchbay.get('flDecay')) * 0.1)
       const forceRadius = (paramValues['forceRadius'] ?? 8) / 100
-      const hue = patchbay.get('flHue')
+      const hueShift = vp ? ((vp['hueShift'] ?? 0) / 360) : 0
+      const hue = hueShift + patchbay.get('flHue')
 
       // Get audio energy
       let audioEnergy = 0
@@ -442,11 +467,9 @@ export function createFluidSim(): Visualizer {
       matDisplay.uniforms['uRainbow']!.value = toggleValues['rainbow'] ?? false
       matDisplay.uniforms['uOpacity']!.value = opacity
 
+      // Update display mesh material — main pipeline renders __scene/__camera
       if (displayScene && displayMesh) {
         displayMesh.material = matDisplay
-        const displayCam = displayScene.userData['camera'] as THREE.OrthographicCamera
-        renderer.setRenderTarget(null)
-        renderer.render(displayScene, displayCam)
       }
     },
 
@@ -471,6 +494,7 @@ export function createFluidSim(): Visualizer {
       fsMesh = null; displayMesh = null
       fsScene = null; fsCamera = null; displayScene = null
       renderer = null
+      viz.__scene = null; viz.__camera = null
     },
 
     setOpacity(op: number) {
@@ -478,4 +502,6 @@ export function createFluidSim(): Visualizer {
       if (matDisplay) matDisplay.uniforms['uOpacity']!.value = op
     },
   }
+
+  return viz
 }

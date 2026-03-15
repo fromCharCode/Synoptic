@@ -202,6 +202,27 @@ export function createFractal3D(): Visualizer {
 
     update(dt: number, patchbay: Patchbay) {
       if (!mesh) return
+
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['iterations'] !== undefined) paramValues['iterations'] = vp['iterations']
+        if (vp['power'] !== undefined) paramValues['power'] = vp['power']
+        if (vp['bailout'] !== undefined) paramValues['bailout'] = vp['bailout']
+        if (vp['epsilon'] !== undefined) paramValues['epsilon'] = vp['epsilon']
+      }
+      if (vt) {
+        if (vt['animate'] !== undefined) toggleValues['animate'] = vt['animate']
+        if (vt['colorByIteration'] !== undefined) toggleValues['colorByIteration'] = vt['colorByIteration']
+        if (vt['orbitTrap'] !== undefined) toggleValues['orbitTrap'] = vt['orbitTrap']
+      }
+
       if (toggleValues['animate']) elapsed += dt
 
       // Re-check analyser each frame (may become available later)

@@ -205,6 +205,26 @@ export function createTerrain(): Visualizer {
       if (!terrainMesh) return
       elapsed += dt
 
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['resolution'] !== undefined) paramValues['resolution'] = vp['resolution']
+        if (vp['heightScale'] !== undefined) paramValues['heightScale'] = vp['heightScale']
+        if (vp['scrollSpeed'] !== undefined) paramValues['scrollSpeed'] = vp['scrollSpeed']
+        if (vp['noiseScale'] !== undefined) paramValues['noiseScale'] = vp['noiseScale']
+      }
+      if (vt) {
+        if (vt['wireframe'] !== undefined) toggleValues['wireframe'] = vt['wireframe']
+        if (vt['fog'] !== undefined) toggleValues['fog'] = vt['fog']
+        if (vt['waterPlane'] !== undefined) toggleValues['waterPlane'] = vt['waterPlane']
+      }
+
       const speedParam  = (paramValues['scrollSpeed'] ?? 20) / 100
       const speedVal    = Math.max(0, speedParam + patchbay.get('terrSpeed'))
       const heightParam = (paramValues['heightScale'] ?? 30) / 100 * 20

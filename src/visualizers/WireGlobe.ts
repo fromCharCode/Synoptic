@@ -142,6 +142,25 @@ export function createWireGlobe(): Visualizer {
       if (!lineSegments || !group) return
       elapsed += dt
 
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['radius'] !== undefined) paramValues['radius'] = vp['radius']
+        if (vp['wireCount'] !== undefined) paramValues['wireCount'] = vp['wireCount']
+        if (vp['displacement'] !== undefined) paramValues['displacement'] = vp['displacement']
+      }
+      if (vt) {
+        if (vt['rotate'] !== undefined) toggleValues['rotate'] = vt['rotate']
+        if (vt['glow'] !== undefined) toggleValues['glow'] = vt['glow']
+        if (vt['innerSphere'] !== undefined) toggleValues['innerSphere'] = vt['innerSphere']
+      }
+
       const radiusParam  = (paramValues['radius'] ?? 40) / 100 * 5
       const dispParam    = (paramValues['displacement'] ?? 20) / 100
       const radiusMod    = patchbay.get('wgRadius')

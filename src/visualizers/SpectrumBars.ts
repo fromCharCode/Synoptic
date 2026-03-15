@@ -210,18 +210,22 @@ export function createSpectrumBars(): Visualizer {
   let analyser: AudioAnalyser | null = null
   let elapsed = 0
 
-  return {
+  const viz: Visualizer & { __scene: THREE.Scene | null; __camera: THREE.OrthographicCamera | null } = {
     id: 'spectrum-bars',
     name: 'Spectrum Bars',
     category: '2d',
     description: 'Frequenz-Balken in Linear, Radial oder Mirror-Layout',
     params: PARAMS,
     toggles: TOGGLES,
+    __scene: null,
+    __camera: null,
 
     init(ctx: VisualizerContext) {
       renderer = ctx.renderer
       scene = new THREE.Scene()
       camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+      viz.__scene = scene
+      viz.__camera = camera
 
       spectrumData = new Float32Array(256).fill(0)
       spectrumTex = new THREE.DataTexture(
@@ -260,13 +264,33 @@ export function createSpectrumBars(): Visualizer {
     },
 
     update(dt: number, patchbay: Patchbay) {
-      if (!renderer || !scene || !camera || !material || !spectrumData || !spectrumTex) return
+      if (!material || !spectrumData || !spectrumTex) return
       elapsed += dt
 
       // Re-check analyser each frame (may become available later)
       if (!analyser && typeof window !== 'undefined') {
         const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
         analyser = w.__synoptikAnalyser ?? null
+      }
+
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['barCount'] !== undefined) paramValues['barCount'] = vp['barCount']
+        if (vp['barWidth'] !== undefined) paramValues['barWidth'] = vp['barWidth']
+        if (vp['gap'] !== undefined) paramValues['gap'] = vp['gap']
+        if (vp['layout'] !== undefined) paramValues['layout'] = vp['layout']
+      }
+      if (vt) {
+        if (vt['rounded'] !== undefined) toggleValues['rounded'] = vt['rounded']
+        if (vt['reflection'] !== undefined) toggleValues['reflection'] = vt['reflection']
+        if (vt['colorPerBar'] !== undefined) toggleValues['colorPerBar'] = vt['colorPerBar']
       }
 
       if (analyser) {
@@ -285,6 +309,8 @@ export function createSpectrumBars(): Visualizer {
         spectrumTex.needsUpdate = true
       }
 
+      const hueShift = vp ? ((vp['hueShift'] ?? 0) / 360) : 0
+
       const u = material.uniforms
       u['uBarCount']!.value    = Math.round(paramValues['barCount'] ?? 64)
       u['uBarWidth']!.value    = Math.max(0.05, Math.min(1, (paramValues['barWidth'] ?? 70) / 100 + patchbay.get('sbWidth')))
@@ -293,11 +319,10 @@ export function createSpectrumBars(): Visualizer {
       u['uRounded']!.value     = toggleValues['rounded'] ?? true
       u['uReflection']!.value  = toggleValues['reflection'] ?? false
       u['uColorPerBar']!.value = toggleValues['colorPerBar'] ?? false
-      u['uHue']!.value         = patchbay.get('sbHue')
+      u['uHue']!.value         = hueShift + patchbay.get('sbHue')
       u['uHeight']!.value      = Math.max(0.01, 1.0 + patchbay.get('sbHeight'))
       u['uTime']!.value        = elapsed
-
-      renderer.render(scene, camera)
+      // 2D visualizer: don't render here — main pipeline renders __scene/__camera
     },
 
     resize(_w: number, _h: number) { void _w; void _h },
@@ -309,10 +334,13 @@ export function createSpectrumBars(): Visualizer {
       if (scene && mesh) scene.remove(mesh)
       mesh = null; material = null; spectrumTex = null
       spectrumData = null; scene = null; camera = null; renderer = null
+      viz.__scene = null; viz.__camera = null
     },
 
     setOpacity(opacity: number) {
       if (material) material.uniforms['uOpacity']!.value = opacity
     },
   }
+
+  return viz
 }

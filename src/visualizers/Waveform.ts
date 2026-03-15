@@ -161,19 +161,23 @@ export function createWaveform(): Visualizer {
   // External audio data hook — set by AudioEngine on window
   let analyser: AudioAnalyser | null = null
 
-  const viz: Visualizer = {
+  const viz: Visualizer & { __scene: THREE.Scene | null; __camera: THREE.OrthographicCamera | null } = {
     id: 'waveform',
     name: 'Waveform',
     category: '2d',
     description: 'Klassisches Oszilloskop mit mehreren Ebenen und Glow',
     params: PARAMS,
     toggles: TOGGLES,
+    __scene: null,
+    __camera: null,
 
     init(ctx: VisualizerContext) {
       renderer = ctx.renderer
 
       scene = new THREE.Scene()
       camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+      viz.__scene = scene
+      viz.__camera = camera
 
       waveformData = new Float32Array(256).fill(0.5)
       waveformTex = new THREE.DataTexture(
@@ -215,13 +219,34 @@ export function createWaveform(): Visualizer {
     },
 
     update(dt: number, patchbay: Patchbay) {
-      if (!renderer || !scene || !camera || !material || !waveformData || !waveformTex) return
+      if (!material || !waveformData || !waveformTex) return
       elapsed += dt
 
       // Re-check analyser each frame (may become available later)
       if (!analyser && typeof window !== 'undefined') {
         const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
         analyser = w.__synoptikAnalyser ?? null
+      }
+
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      // Sync Form Tab params to local paramValues
+      if (vp) {
+        if (vp['lineWidth'] !== undefined) paramValues['lineWidth'] = vp['lineWidth']
+        if (vp['layers'] !== undefined) paramValues['layers'] = vp['layers']
+        if (vp['smoothing'] !== undefined) paramValues['smoothing'] = vp['smoothing']
+        if (vp['layout'] !== undefined) paramValues['layout'] = vp['layout']
+      }
+      if (vt) {
+        if (vt['glow'] !== undefined) toggleValues['glow'] = vt['glow']
+        if (vt['fill'] !== undefined) toggleValues['fill'] = vt['fill']
+        if (vt['gradient'] !== undefined) toggleValues['gradient'] = vt['gradient']
       }
 
       // Update audio data
@@ -242,20 +267,22 @@ export function createWaveform(): Visualizer {
         waveformTex.needsUpdate = true
       }
 
+      // Apply hue shift from Form Tab
+      const hueShift = vp ? ((vp['hueShift'] ?? 0) / 360) : 0
+
       const u = material.uniforms
       u['uLineWidth']!.value  = (paramValues['lineWidth'] ?? 3) + patchbay.get('wfWidth')
       u['uLayers']!.value     = Math.max(1, Math.min(5, Math.round(paramValues['layers'] ?? 2)))
       u['uSmoothing']!.value  = paramValues['smoothing'] ?? 30
       u['uAmplitude']!.value  = Math.max(0.05, 0.8 + patchbay.get('wfAmplitude'))
-      u['uHue']!.value        = patchbay.get('wfHue')
+      u['uHue']!.value        = hueShift + patchbay.get('wfHue')
       u['uGlow']!.value       = Math.max(0, 1.0 + patchbay.get('wfGlow'))
       u['uGlowEnabled']!.value = toggleValues['glow'] ?? true
       u['uFill']!.value       = toggleValues['fill'] ?? false
       u['uGradient']!.value   = toggleValues['gradient'] ?? false
       u['uMirror']!.value     = (paramValues['layout'] ?? 0) === 1
       u['uTime']!.value       = elapsed
-
-      renderer.render(scene, camera)
+      // 2D visualizer: don't render here — main pipeline renders __scene/__camera
     },
 
     resize(width: number, height: number) {
@@ -274,6 +301,8 @@ export function createWaveform(): Visualizer {
       scene = null
       camera = null
       renderer = null
+      viz.__scene = null
+      viz.__camera = null
     },
 
     setOpacity(opacity: number) {

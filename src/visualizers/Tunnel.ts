@@ -166,6 +166,27 @@ export function createTunnel(): Visualizer {
       if (!instancedMesh || !group) return
       elapsed += dt
 
+      // Read shared vizParams for Form Tab settings
+      const vp = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizParams?: Record<string, number> }).__synoptikVizParams
+        : undefined
+      const vt = typeof window !== 'undefined'
+        ? (window as unknown as { __synoptikVizToggles?: Record<string, boolean> }).__synoptikVizToggles
+        : undefined
+
+      if (vp) {
+        if (vp['radius'] !== undefined) paramValues['radius'] = vp['radius']
+        if (vp['ringCount'] !== undefined) paramValues['ringCount'] = vp['ringCount']
+        if (vp['ringSegments'] !== undefined) paramValues['ringSegments'] = vp['ringSegments']
+        if (vp['speed'] !== undefined) paramValues['speed'] = vp['speed']
+        if (vp['twist'] !== undefined) paramValues['twist'] = vp['twist']
+      }
+      if (vt) {
+        if (vt['wireframe'] !== undefined) toggleValues['wireframe'] = vt['wireframe']
+        if (vt['glow'] !== undefined) toggleValues['glow'] = vt['glow']
+        if (vt['colorRings'] !== undefined) toggleValues['colorRings'] = vt['colorRings']
+      }
+
       const speedParam  = (paramValues['speed'] ?? 55) / 100
       const speedVal    = Math.max(0, speedParam + patchbay.get('tSpeed'))
       const radiusMod   = patchbay.get('tRadius')
