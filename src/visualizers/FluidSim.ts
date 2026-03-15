@@ -16,6 +16,7 @@ import type {
   Visualizer, VisualizerContext, VisualizerParam, VisualizerToggle,
   Patchbay, Destination,
 } from '@core/types'
+import type { AudioAnalyser } from '@input/AudioAnalyser'
 
 // ── Shared fullscreen vert ──
 const VERT = /* glsl */`
@@ -233,7 +234,7 @@ export function createFluidSim(): Visualizer {
   let displayScene: THREE.Scene | null = null
   let displayMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> | null = null
 
-  let analyserNode: AnalyserNode | null = null
+  let analyser: AudioAnalyser | null = null
   let elapsed = 0
   let opacity = 1
 
@@ -329,8 +330,8 @@ export function createFluidSim(): Visualizer {
       displayScene.userData['camera'] = displayCam
 
       if (typeof window !== 'undefined') {
-        const w = window as Window & { __synoptikAnalyser?: AnalyserNode }
-        analyserNode = w.__synoptikAnalyser ?? null
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
       }
     },
 
@@ -340,6 +341,12 @@ export function createFluidSim(): Visualizer {
       if (!matAdvect || !matSplat || !matDivergence || !matPressure || !matGradient || !matDisplay) return
       elapsed += dt
 
+      // Re-check analyser each frame (may become available later)
+      if (!analyser && typeof window !== 'undefined') {
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
+      }
+
       const effectiveDt = Math.min(dt, 0.033) * Math.max(0.1, 1.0 + patchbay.get('flSpeed'))
       const viscosity = Math.max(0, (paramValues['viscosity'] ?? 30) / 100 + patchbay.get('flViscosity'))
       const colorDecay = Math.max(0.9, 1.0 - ((paramValues['colorDecay'] ?? 20) / 100 + patchbay.get('flDecay')) * 0.1)
@@ -348,12 +355,9 @@ export function createFluidSim(): Visualizer {
 
       // Get audio energy
       let audioEnergy = 0
-      const audioData = new Uint8Array(analyserNode ? analyserNode.frequencyBinCount : 0)
-      if (analyserNode) {
-        analyserNode.getByteFrequencyData(audioData)
-        let sum = 0
-        for (let i = 0; i < audioData.length; i++) sum += audioData[i] ?? 0
-        audioEnergy = audioData.length > 0 ? sum / (audioData.length * 255) : 0
+      if (analyser) {
+        const analysis = analyser.getAnalysis()
+        audioEnergy = analysis.energy
       }
 
       // 1. Advect velocity
@@ -364,23 +368,28 @@ export function createFluidSim(): Visualizer {
       runPass(matAdvect, velB)
       ;[velA, velB] = swap(velA, velB)
 
-      // 2. Splat force (audio inject)
-      if (toggleValues['audioInject'] && audioEnergy > 0.01) {
-        const force = Math.max(0, (audioEnergy * 2.0 + patchbay.get('flForce')) * 3.0)
+      // 2. Splat force — audio-driven or auto-forces when no audio
+      const hasAudio = analyser && audioEnergy > 0.01
+      const shouldInject = (toggleValues['audioInject'] && hasAudio) || !hasAudio
+
+      if (shouldInject) {
+        // Use audio energy or synthetic pulsing force
+        const baseForce = hasAudio ? audioEnergy * 2.0 : (0.3 + 0.2 * Math.sin(elapsed * 1.5))
+        const force = Math.max(0, (baseForce + patchbay.get('flForce')) * 3.0)
         const h = hue + elapsed * 0.1
         const r = Math.sin(h * Math.PI * 2) * 0.5 + 0.5
         const g = Math.sin(h * Math.PI * 2 + 2.094) * 0.5 + 0.5
         const b = Math.sin(h * Math.PI * 2 + 4.189) * 0.5 + 0.5
 
-        // Velocity splat
-        matSplat.uniforms['uBase']!.value  = velA.texture
-        matSplat.uniforms['uPoint']!.value = new THREE.Vector2(
-          0.5 + Math.sin(elapsed * 0.7) * 0.1,
-          0.5 + Math.cos(elapsed * 0.5) * 0.1,
-        )
-        matSplat.uniforms['uColor']!.value  = new THREE.Vector3(
-          (Math.random() - 0.5) * force,
-          (Math.random() - 0.5) * force,
+        // Velocity splat — orbit around center
+        const splatX = 0.5 + Math.sin(elapsed * 0.7) * 0.2
+        const splatY = 0.5 + Math.cos(elapsed * 0.5) * 0.2
+
+        ;(matSplat.uniforms['uBase']!.value as THREE.Texture | null) = velA.texture
+        ;(matSplat.uniforms['uPoint']!.value as THREE.Vector2).set(splatX, splatY)
+        ;(matSplat.uniforms['uColor']!.value as THREE.Vector3).set(
+          Math.cos(elapsed * 1.3) * force,
+          Math.sin(elapsed * 0.9) * force,
           0,
         )
         matSplat.uniforms['uRadius']!.value = forceRadius
@@ -389,8 +398,8 @@ export function createFluidSim(): Visualizer {
         ;[velA, velB] = swap(velA, velB)
 
         // Density splat
-        matSplat.uniforms['uBase']!.value   = denA.texture
-        matSplat.uniforms['uColor']!.value  = new THREE.Vector3(r, g, b)
+        ;(matSplat.uniforms['uBase']!.value as THREE.Texture | null) = denA.texture
+        ;(matSplat.uniforms['uColor']!.value as THREE.Vector3).set(r, g, b)
         matSplat.uniforms['uForce']!.value  = force * 0.5
         runPass(matSplat, denB)
         ;[denA, denB] = swap(denA, denB)

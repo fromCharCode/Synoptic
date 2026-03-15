@@ -21,12 +21,12 @@ export const PARTICLE_FIELD_DESTINATIONS: Destination[] = [
 ]
 
 const PARAMS: VisualizerParam[] = [
-  { id: 'count',       label: 'Count',       type: 'slider', min: 0,   max: 100, default: 20,  group: 'Particles' },
-  { id: 'size',        label: 'Size',        type: 'slider', min: 1,   max: 100, default: 30,  group: 'Particles' },
-  { id: 'speed',       label: 'Speed',       type: 'slider', min: 0,   max: 100, default: 30,  group: 'Particles' },
-  { id: 'spread',      label: 'Spread',      type: 'slider', min: 1,   max: 100, default: 50,  group: 'Particles' },
-  { id: 'gravity',     label: 'Gravity',     type: 'slider', min: 0,   max: 100, default: 10,  group: 'Physics' },
-  { id: 'turbulence',  label: 'Turbulence',  type: 'slider', min: 0,   max: 100, default: 20,  group: 'Physics' },
+  { id: 'count',       label: 'Count',       type: 'slider', min: 0,   max: 100, default: 20,  group: 'Partikel' },
+  { id: 'size',        label: 'Size',        type: 'slider', min: 1,   max: 100, default: 30,  group: 'Partikel' },
+  { id: 'speed',       label: 'Speed',       type: 'slider', min: 0,   max: 100, default: 30,  group: 'Partikel' },
+  { id: 'spread',      label: 'Spread',      type: 'slider', min: 1,   max: 100, default: 50,  group: 'Partikel' },
+  { id: 'gravity',     label: 'Gravity',     type: 'slider', min: 0,   max: 100, default: 10,  group: 'Physik' },
+  { id: 'turbulence',  label: 'Turbulence',  type: 'slider', min: 0,   max: 100, default: 20,  group: 'Physik' },
 ]
 
 const TOGGLES: VisualizerToggle[] = [
@@ -35,16 +35,14 @@ const TOGGLES: VisualizerToggle[] = [
   { id: 'audioForces',     label: 'Audio Forces',      default: true  },
 ]
 
-// Vertex shader: applies audio forces, gravity, turbulence per instance
+// Vertex shader: applies audio forces, gravity, turbulence per particle
 const VERT = /* glsl */`
-  attribute vec3 offset;
   attribute vec3 velocity;
   attribute float seed;
 
   uniform float time;
   uniform float size;
   uniform float turbulence;
-  uniform bool colorByVelocity;
 
   varying vec3 vVelocity;
   varying float vSeed;
@@ -53,7 +51,7 @@ const VERT = /* glsl */`
     vVelocity = velocity;
     vSeed = seed;
 
-    vec3 pos = offset + position;
+    vec3 pos = position;
 
     // turbulence displacement
     float t = time * 0.5 + seed * 6.2831;
@@ -105,28 +103,41 @@ export function createParticleField(): Visualizer {
 
   function buildGeometry(count: number): THREE.BufferGeometry {
     const spread = (paramValues['spread'] ?? 50) / 50 * 50
+    // Use sub-arrays for the actual count
+    const posArr = new Float32Array(count * 3)
+    const velArr = new Float32Array(count * 3)
+    const seedArr = new Float32Array(count)
+
     for (let i = 0; i < count; i++) {
       const i3 = i * 3
-      offsets[i3]     = (Math.random() - 0.5) * spread * 2
-      offsets[i3 + 1] = (Math.random() - 0.5) * spread * 2
-      offsets[i3 + 2] = (Math.random() - 0.5) * spread * 2
-      velocities[i3]     = (Math.random() - 0.5) * 0.1
-      velocities[i3 + 1] = (Math.random() - 0.5) * 0.1
-      velocities[i3 + 2] = (Math.random() - 0.5) * 0.1
-      seeds[i] = Math.random()
+      posArr[i3]     = (Math.random() - 0.5) * spread * 2
+      posArr[i3 + 1] = (Math.random() - 0.5) * spread * 2
+      posArr[i3 + 2] = (Math.random() - 0.5) * spread * 2
+      velArr[i3]     = (Math.random() - 0.5) * 0.1
+      velArr[i3 + 1] = (Math.random() - 0.5) * 0.1
+      velArr[i3 + 2] = (Math.random() - 0.5) * 0.1
+      seedArr[i] = Math.random()
+      // Copy to module-level arrays for update loop
+      offsets[i3]     = posArr[i3]!
+      offsets[i3 + 1] = posArr[i3 + 1]!
+      offsets[i3 + 2] = posArr[i3 + 2]!
+      velocities[i3]     = velArr[i3]!
+      velocities[i3 + 1] = velArr[i3 + 1]!
+      velocities[i3 + 2] = velArr[i3 + 2]!
+      seeds[i] = seedArr[i]!
     }
 
     const geo = new THREE.BufferGeometry()
-    // Single point as base
-    geo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3))
+    // Each particle is a point — positions stored per-particle
+    const posAttr = new THREE.BufferAttribute(posArr, 3)
+    posAttr.setUsage(THREE.DynamicDrawUsage)
+    geo.setAttribute('position', posAttr)
 
-    const offsetAttr    = new THREE.InstancedBufferAttribute(offsets.slice(0, count * 3), 3)
-    const velocityAttr  = new THREE.InstancedBufferAttribute(velocities.slice(0, count * 3), 3)
-    const seedAttr      = new THREE.InstancedBufferAttribute(seeds.slice(0, count), 1)
-
-    geo.setAttribute('offset',   offsetAttr)
+    const velocityAttr = new THREE.BufferAttribute(velArr, 3)
     geo.setAttribute('velocity', velocityAttr)
-    geo.setAttribute('seed',     seedAttr)
+
+    const seedAttr = new THREE.BufferAttribute(seedArr, 1)
+    geo.setAttribute('seed', seedAttr)
 
     return geo
   }
@@ -189,19 +200,18 @@ export function createParticleField(): Visualizer {
       uniforms['size']!.value       = Math.max(0.01, sizeVal)
       uniforms['turbulence']!.value = Math.max(0, turbVal)
 
-      // Update offsets (move particles by velocity + gravity)
+      // Update positions (move particles by velocity + gravity)
       const geo = mesh.geometry
-      const offsetAttr = geo.getAttribute('offset') as THREE.InstancedBufferAttribute
-      const velocityAttr = geo.getAttribute('velocity') as THREE.InstancedBufferAttribute
-      const count = offsetAttr.count
+      const posAttr = geo.getAttribute('position') as THREE.BufferAttribute
+      const velocityAttr = geo.getAttribute('velocity') as THREE.BufferAttribute
+      const count = posAttr.count
 
       const spread = ((paramValues['spread'] ?? 50) / 50 * 50) + patchbay.get('pSpread') * 50
 
       for (let i = 0; i < count; i++) {
-        const i3 = i * 3
-        let ox = offsetAttr.getX(i)
-        let oy = offsetAttr.getY(i)
-        let oz = offsetAttr.getZ(i)
+        let ox = posAttr.getX(i)
+        let oy = posAttr.getY(i)
+        let oz = posAttr.getZ(i)
         const vx = velocityAttr.getX(i)
         const vy = velocityAttr.getY(i)
         const vz = velocityAttr.getZ(i)
@@ -219,9 +229,9 @@ export function createParticleField(): Visualizer {
         if (oz >  bound) oz -= bound * 2
         if (oz < -bound) oz += bound * 2
 
-        offsetAttr.setXYZ(i, ox, oy, oz)
+        posAttr.setXYZ(i, ox, oy, oz)
       }
-      offsetAttr.needsUpdate = true
+      posAttr.needsUpdate = true
 
       // Color modulation
       _color.setHSL(0.6, 0.8, 0.6)
@@ -232,9 +242,6 @@ export function createParticleField(): Visualizer {
       const s = Math.max(0, Math.min(1, _hsl.s + patchbay.get('pSat')))
       const l = Math.max(0, Math.min(1, _hsl.l + patchbay.get('pBrt')))
       ;(uniforms['color']!.value as THREE.Color).setHSL(h, s, l)
-
-      void speedVal
-      void gravVal
     },
 
     resize(_width: number, _height: number) { /* camera handled externally */ },

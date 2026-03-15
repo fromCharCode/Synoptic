@@ -3,6 +3,7 @@ import type {
   Visualizer, VisualizerContext, VisualizerParam, VisualizerToggle,
   Patchbay, Destination,
 } from '@core/types'
+import type { AudioAnalyser } from '@input/AudioAnalyser'
 
 const VERT = /* glsl */`
 varying vec2 vUv;
@@ -174,11 +175,11 @@ export const SPECTRUM_BARS_DESTINATIONS: Destination[] = [
 ]
 
 const PARAMS: VisualizerParam[] = [
-  { id: 'barCount', label: 'Bar Count', type: 'slider', min: 16,  max: 256, default: 64, group: 'Darstellung' },
-  { id: 'barWidth', label: 'Bar Width', type: 'slider', min: 0,   max: 100, default: 70, group: 'Darstellung' },
-  { id: 'gap',      label: 'Gap',       type: 'slider', min: 0,   max: 100, default: 20, group: 'Darstellung' },
+  { id: 'barCount', label: 'Bar Count', type: 'slider', min: 16,  max: 256, default: 64, group: 'Bars' },
+  { id: 'barWidth', label: 'Bar Width', type: 'slider', min: 0,   max: 100, default: 70, group: 'Bars' },
+  { id: 'gap',      label: 'Gap',       type: 'slider', min: 0,   max: 100, default: 20, group: 'Bars' },
   {
-    id: 'layout', label: 'Layout', type: 'select', default: 0, group: 'Darstellung',
+    id: 'layout', label: 'Layout', type: 'select', default: 0, group: 'Layout',
     options: [
       { value: 0, label: 'Linear' },
       { value: 1, label: 'Radial' },
@@ -206,7 +207,7 @@ export function createSpectrumBars(): Visualizer {
   let material: THREE.ShaderMaterial | null = null
   let spectrumTex: THREE.DataTexture | null = null
   let spectrumData: Float32Array | null = null
-  let analyserNode: AnalyserNode | null = null
+  let analyser: AudioAnalyser | null = null
   let elapsed = 0
 
   return {
@@ -253,8 +254,8 @@ export function createSpectrumBars(): Visualizer {
       scene.add(mesh)
 
       if (typeof window !== 'undefined') {
-        const w = window as Window & { __synoptikAnalyser?: AnalyserNode }
-        analyserNode = w.__synoptikAnalyser ?? null
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
       }
     },
 
@@ -262,12 +263,17 @@ export function createSpectrumBars(): Visualizer {
       if (!renderer || !scene || !camera || !material || !spectrumData || !spectrumTex) return
       elapsed += dt
 
-      if (analyserNode) {
-        const buf = new Uint8Array(analyserNode.frequencyBinCount)
-        analyserNode.getByteFrequencyData(buf)
-        const step = Math.floor(buf.length / 256)
+      // Re-check analyser each frame (may become available later)
+      if (!analyser && typeof window !== 'undefined') {
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
+      }
+
+      if (analyser) {
+        const freqData = analyser.getFrequencyData()
+        const step = Math.max(1, Math.floor(freqData.length / 256))
         for (let i = 0; i < 256; i++) {
-          spectrumData[i] = (buf[i * step] ?? 0) / 255
+          spectrumData[i] = (freqData[i * step] ?? 0) / 255
         }
         spectrumTex.needsUpdate = true
       } else {

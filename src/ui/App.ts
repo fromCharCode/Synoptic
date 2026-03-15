@@ -28,6 +28,7 @@ export interface AppInterface {
   spotifyPlayer: App['spotifyPlayer']
   audioAnalyser: App['audioAnalyser']
   getFXPasses: () => FXPass[]
+  getLFOPhases: () => number[]
 }
 
 function useStore(store: Store): SynoptikState & SynoptikActions {
@@ -53,7 +54,8 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
     bands: Float32Array | null
     analysis: NonNullable<Parameters<typeof AudioTab>[0]['analysis']> | null
     mode: string | null
-  }>({ bands: null, analysis: null, mode: null })
+    lfoPhases: number[]
+  }>({ bands: null, analysis: null, mode: null, lfoPhases: [] })
 
   // Poll audio state at ~15fps for meters
   useEffect(() => {
@@ -64,17 +66,19 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
       frame++
       if (frame % 4 !== 0) return // ~15fps
 
+      const lfoPhases = app.getLFOPhases()
       const analyser = app.audioAnalyser
       if (analyser) {
         setAudioLive({
           bands: analyser.getBands(),
           analysis: analyser.getAnalysis(),
           mode: app.audioEngine.mode,
+          lfoPhases,
         })
       } else {
         setAudioLive(prev => {
-          if (prev.mode !== app.audioEngine.mode) {
-            return { bands: null, analysis: null, mode: app.audioEngine.mode }
+          if (prev.mode !== app.audioEngine.mode || prev.lfoPhases !== lfoPhases) {
+            return { bands: null, analysis: null, mode: app.audioEngine.mode, lfoPhases }
           }
           return prev
         })
@@ -89,6 +93,11 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
 
   // Get visualizer list from registry
   const visualizers = app.registry.getVisualizerList()
+
+  // Get active visualizer params/toggles from registry
+  const activeViz = app.registry.getVisualizer(state.activeVisualizer)
+  const activeVizParams = activeViz?.params ?? []
+  const activeVizToggles = activeViz?.toggles ?? []
 
   // Get FX passes
   const fxPasses = app.getFXPasses()
@@ -172,11 +181,21 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
   }, [state])
 
   const handleReset = useCallback(() => {
+    // Reset all FX params to 0 and disable all passes
+    const resetParams: Record<string, number> = {}
+    const resetEnabled: Record<string, boolean> = {}
+    const passes = app.getFXPasses()
+    for (const pass of passes) {
+      resetEnabled[pass.id] = false
+      for (const param of pass.params) {
+        resetParams[param.id] = 0
+      }
+    }
     state.loadState({
-      fxParams: {},
-      fxEnabled: {},
+      fxParams: resetParams,
+      fxEnabled: resetEnabled,
     })
-  }, [state])
+  }, [state, app])
 
   const handleLoadFactory = useCallback((name: string) => {
     const preset = FACTORY_PRESETS[name]
@@ -195,6 +214,9 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
     switch (state.activeTab) {
       case 'Form':
         return html`<${ShapeTab}
+          visualizerId=${state.activeVisualizer}
+          params=${activeVizParams}
+          toggles=${activeVizToggles}
           vizParams=${state.vizParams}
           vizToggles=${state.vizToggles}
           style=${state.style}
@@ -213,6 +235,7 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
         return html`<${LFOTab}
           lfos=${state.lfos}
           envelopes=${state.envelopes}
+          lfoPhases=${audioLive.lfoPhases}
           onLFO=${handleLFO}
           onEnvelope=${handleEnvelope}
         />`

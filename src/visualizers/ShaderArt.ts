@@ -3,6 +3,7 @@ import type {
   Visualizer, VisualizerContext, VisualizerParam, VisualizerToggle,
   Patchbay, Destination,
 } from '@core/types'
+import type { AudioAnalyser } from '@input/AudioAnalyser'
 
 const VERT = /* glsl */`
 varying vec2 vUv;
@@ -217,7 +218,7 @@ export const SHADER_ART_DESTINATIONS: Destination[] = [
 
 const PARAMS: VisualizerParam[] = [
   {
-    id: 'pattern', label: 'Pattern', type: 'select', default: 0, group: 'Muster',
+    id: 'pattern', label: 'Pattern', type: 'select', default: 0, group: 'Pattern',
     options: [
       { value: 0, label: 'Voronoi' },
       { value: 1, label: 'Plasma' },
@@ -225,9 +226,9 @@ const PARAMS: VisualizerParam[] = [
       { value: 3, label: 'Reaction Diffusion' },
     ],
   },
-  { id: 'speed',      label: 'Speed',      type: 'slider', min: 0,   max: 100, default: 30, group: 'Muster' },
-  { id: 'complexity', label: 'Complexity', type: 'slider', min: 0,   max: 100, default: 40, group: 'Muster' },
-  { id: 'zoom',       label: 'Zoom',       type: 'slider', min: 10,  max: 300, default: 100, group: 'Muster' },
+  { id: 'speed',      label: 'Speed',      type: 'slider', min: 0,   max: 100, default: 30,  group: 'Einstellungen' },
+  { id: 'complexity', label: 'Complexity', type: 'slider', min: 0,   max: 100, default: 40,  group: 'Einstellungen' },
+  { id: 'zoom',       label: 'Zoom',       type: 'slider', min: 10,  max: 300, default: 100, group: 'Einstellungen' },
 ]
 
 const TOGGLES: VisualizerToggle[] = [
@@ -246,7 +247,7 @@ export function createShaderArt(): Visualizer {
   let renderer: THREE.WebGLRenderer | null = null
   let mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> | null = null
   let material: THREE.ShaderMaterial | null = null
-  let analyserNode: AnalyserNode | null = null
+  let analyser: AudioAnalyser | null = null
   let elapsed = 0
 
   return {
@@ -286,8 +287,8 @@ export function createShaderArt(): Visualizer {
       scene.add(mesh)
 
       if (typeof window !== 'undefined') {
-        const w = window as Window & { __synoptikAnalyser?: AnalyserNode }
-        analyserNode = w.__synoptikAnalyser ?? null
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
       }
     },
 
@@ -295,14 +296,17 @@ export function createShaderArt(): Visualizer {
       if (!renderer || !scene || !camera || !material) return
       elapsed += dt
 
+      // Re-check analyser each frame (may become available later)
+      if (!analyser && typeof window !== 'undefined') {
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
+      }
+
       // Get audio energy
       let audioEnergy = 0
-      if (analyserNode) {
-        const buf = new Uint8Array(analyserNode.frequencyBinCount)
-        analyserNode.getByteFrequencyData(buf)
-        let sum = 0
-        for (let i = 0; i < buf.length; i++) sum += buf[i] ?? 0
-        audioEnergy = sum / (buf.length * 255)
+      if (analyser) {
+        const analysis = analyser.getAnalysis()
+        audioEnergy = analysis.energy
       }
 
       const u = material.uniforms

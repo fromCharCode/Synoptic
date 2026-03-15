@@ -1,4 +1,5 @@
 import { h } from 'preact'
+import { useRef, useEffect } from 'preact/hooks'
 import htm from 'htm'
 import type { Waveform } from '@core/types'
 import { Section, Slider, Toggle } from './controls'
@@ -26,18 +27,84 @@ const ENV_SOURCES: Array<{ value: string; label: string }> = [
   { value: 'rms', label: 'RMS' },
 ]
 
+const LFO_COLORS = ['#5ce0d6', '#f472b6', '#a78bfa', '#fbbf24']
+
+function computeWaveform(waveform: string, p: number): number {
+  switch (waveform) {
+    case 'sin': return Math.sin(p * Math.PI * 2) * 0.5 + 0.5
+    case 'tri': return p < 0.5 ? p * 2 : (1 - p) * 2
+    case 'saw': return p
+    case 'sqr': return p < 0.5 ? 1 : 0
+    case 's&h': return 0.5
+    default: return 0.5
+  }
+}
+
+function LFOWaveformCanvas({ waveform, phase, color }: {
+  waveform: string
+  phase: number
+  color: string
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const w = 280
+    const h = 22
+    canvas.width = w
+    canvas.height = h
+
+    ctx.clearRect(0, 0, w, h)
+
+    // Draw waveform shape (3 cycles visible)
+    ctx.beginPath()
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1.5
+    const cycles = 3
+    for (let x = 0; x < w; x++) {
+      const p = (x / w * cycles) % 1
+      const y = (1 - computeWaveform(waveform, p)) * (h - 2) + 1
+      if (x === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.stroke()
+
+    // Draw phase indicator (vertical line)
+    const phaseX = (phase % 1) * (w / cycles)
+    ctx.beginPath()
+    ctx.strokeStyle = color
+    ctx.lineWidth = 2
+    ctx.globalAlpha = 0.8
+    ctx.moveTo(phaseX, 0)
+    ctx.lineTo(phaseX, h)
+    ctx.stroke()
+    ctx.globalAlpha = 1
+  }, [waveform, phase, color])
+
+  return html`<canvas ref=${canvasRef} width=${280} height=${22}
+    style="width:100%;height:22px;border-radius:4px;background:rgba(255,255,255,0.03);margin:4px 0" />`
+}
+
 export interface LFOTabProps {
   lfos: Array<{ rate: number; waveform: string; depth: number; phaseOffset: number; retriggerOnBeat: boolean }>
   envelopes: Array<{ source: string; attack: number; release: number }>
+  lfoPhases: number[]
   onLFO: (index: number, update: Partial<{ rate: number; waveform: string; depth: number; phaseOffset: number; retriggerOnBeat: boolean }>) => void
   onEnvelope: (index: number, update: Partial<{ source: string; attack: number; release: number }>) => void
 }
 
-function LFOCard({ index, lfo, onUpdate }: {
+function LFOCard({ index, lfo, phase, onUpdate }: {
   index: number
   lfo: { rate: number; waveform: string; depth: number; phaseOffset: number; retriggerOnBeat: boolean }
+  phase: number
   onUpdate: (index: number, update: Partial<{ rate: number; waveform: string; depth: number; phaseOffset: number; retriggerOnBeat: boolean }>) => void
 }) {
+  const color = LFO_COLORS[index] ?? LFO_COLORS[0]!
+
   return html`
     <div class="lc">
       <div class="lh">
@@ -49,6 +116,7 @@ function LFOCard({ index, lfo, onUpdate }: {
           `)}
         </div>
       </div>
+      <${LFOWaveformCanvas} waveform=${lfo.waveform} phase=${phase} color=${color} />
       <${Slider} label="Rate" value=${Math.round(lfo.rate * 100)} min=${1} max=${1000}
         onChange=${(v: number) => onUpdate(index, { rate: v / 100 })} />
       <${Slider} label="Depth" value=${Math.round(lfo.depth * 100)} min=${0} max=${100}
@@ -85,12 +153,12 @@ function EnvelopeCard({ index, env, onUpdate }: {
   `
 }
 
-export function LFOTab({ lfos, envelopes, onLFO, onEnvelope }: LFOTabProps) {
+export function LFOTab({ lfos, envelopes, lfoPhases, onLFO, onEnvelope }: LFOTabProps) {
   return html`
     <div class="tc active">
       <${Section} title="LFOs" />
       ${lfos.map((lfo, i) => html`
-        <${LFOCard} index=${i} lfo=${lfo} onUpdate=${onLFO} />
+        <${LFOCard} index=${i} lfo=${lfo} phase=${lfoPhases[i] ?? 0} onUpdate=${onLFO} />
       `)}
 
       <${Section} title="Envelope Follower" />

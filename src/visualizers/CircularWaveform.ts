@@ -3,6 +3,7 @@ import type {
   Visualizer, VisualizerContext, VisualizerParam, VisualizerToggle,
   Patchbay, Destination,
 } from '@core/types'
+import type { AudioAnalyser } from '@input/AudioAnalyser'
 
 const VERT = /* glsl */`
 varying vec2 vUv;
@@ -119,10 +120,10 @@ export const CIRCULAR_WAVEFORM_DESTINATIONS: Destination[] = [
 ]
 
 const PARAMS: VisualizerParam[] = [
-  { id: 'radius',        label: 'Radius',        type: 'slider', min: 0,   max: 100, default: 55, group: 'Form' },
-  { id: 'lineWidth',     label: 'Line Width',    type: 'slider', min: 1,   max: 10,  default: 3,  group: 'Form' },
-  { id: 'layers',        label: 'Layers',        type: 'slider', min: 1,   max: 5,   default: 2,  group: 'Form' },
-  { id: 'rotationSpeed', label: 'Rotation Speed',type: 'slider', min: 0,   max: 100, default: 10, group: 'Form' },
+  { id: 'radius',        label: 'Radius',        type: 'slider', min: 0,   max: 100, default: 55, group: 'Waveform' },
+  { id: 'lineWidth',     label: 'Line Width',    type: 'slider', min: 1,   max: 10,  default: 3,  group: 'Waveform' },
+  { id: 'layers',        label: 'Layers',        type: 'slider', min: 1,   max: 5,   default: 2,  group: 'Waveform' },
+  { id: 'rotationSpeed', label: 'Rotation Speed',type: 'slider', min: 0,   max: 100, default: 10, group: 'Waveform' },
 ]
 
 const TOGGLES: VisualizerToggle[] = [
@@ -144,7 +145,7 @@ export function createCircularWaveform(): Visualizer {
   let material: THREE.ShaderMaterial | null = null
   let waveformTex: THREE.DataTexture | null = null
   let waveformData: Float32Array | null = null
-  let analyserNode: AnalyserNode | null = null
+  let analyser: AudioAnalyser | null = null
   let elapsed = 0
   let rotation = 0
 
@@ -193,8 +194,8 @@ export function createCircularWaveform(): Visualizer {
       scene.add(mesh)
 
       if (typeof window !== 'undefined') {
-        const w = window as Window & { __synoptikAnalyser?: AnalyserNode }
-        analyserNode = w.__synoptikAnalyser ?? null
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
       }
     },
 
@@ -202,16 +203,22 @@ export function createCircularWaveform(): Visualizer {
       if (!renderer || !scene || !camera || !material || !waveformData || !waveformTex) return
       elapsed += dt
 
+      // Re-check analyser each frame (may become available later)
+      if (!analyser && typeof window !== 'undefined') {
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
+      }
+
       const rotSpeed = (paramValues['rotationSpeed'] ?? 10) / 100 * Math.PI * 2
       rotation += (rotSpeed + patchbay.get('cwRotation')) * dt
 
       // Update waveform data
-      if (analyserNode) {
-        const buf = new Float32Array(analyserNode.fftSize)
-        analyserNode.getFloatTimeDomainData(buf)
-        const step = Math.floor(buf.length / 256)
+      if (analyser) {
+        const tdData = analyser.getTimeDomainData()
+        const step = Math.max(1, Math.floor(tdData.length / 256))
         for (let i = 0; i < 256; i++) {
-          waveformData[i] = (buf[i * step] ?? 0) * 0.5 + 0.5
+          // TimeDomainData is Uint8Array centered at 128, convert to 0..1
+          waveformData[i] = (tdData[i * step] ?? 128) / 255
         }
         waveformTex.needsUpdate = true
       } else {

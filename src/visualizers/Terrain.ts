@@ -38,6 +38,7 @@ const VERT = /* glsl */`
   uniform float audioLow;
   uniform float audioMid;
   uniform float audioHigh;
+  uniform float scrollOffset;
 
   varying float vHeight;
   varying vec2 vUv;
@@ -69,12 +70,14 @@ const VERT = /* glsl */`
 
   void main() {
     vUv = uv;
-    vec2 noisePos = position.xz * noiseScale * 0.1 + vec2(time * 0.2, 0.0);
+    // Use scrollOffset for infinite terrain scrolling (UV-based, mesh stays in place)
+    vec2 noisePos = position.xz * noiseScale * 0.1 + vec2(0.0, scrollOffset);
     float h = fbm(noisePos);
     // Audio contribution
-    h += audioLow  * sin(position.x * 0.5 + time * 2.0) * 0.5;
-    h += audioMid  * sin(position.z * 0.8 + time * 3.0) * 0.3;
-    h += audioHigh * sin(position.x * 2.0 + position.z * 2.0 + time * 5.0) * 0.1;
+    float t = time;
+    h += audioLow  * sin(position.x * 0.5 + t * 2.0) * 0.5;
+    h += audioMid  * sin(position.z * 0.8 + t * 3.0) * 0.3;
+    h += audioHigh * sin(position.x * 2.0 + position.z * 2.0 + t * 5.0) * 0.1;
 
     float y = h * heightScale;
     vHeight = y / max(heightScale, 0.001);
@@ -116,9 +119,10 @@ export function createTerrain(): Visualizer {
   let scene: THREE.Scene | null = null
   let camera: THREE.PerspectiveCamera | null = null
   let elapsed = 0
+  let scrollAccum = 0
 
   function buildTerrain(res: number): THREE.PlaneGeometry {
-    const geo = new THREE.PlaneGeometry(100, 100, res, res)
+    const geo = new THREE.PlaneGeometry(200, 200, res, res)
     // Rotate to XZ plane
     geo.rotateX(-Math.PI / 2)
     return geo
@@ -156,16 +160,17 @@ export function createTerrain(): Visualizer {
         vertexShader: VERT,
         fragmentShader: FRAG,
         uniforms: {
-          time:        { value: 0 },
-          heightScale: { value: heightScale },
-          noiseScale:  { value: noiseScale },
-          audioLow:    { value: 0 },
-          audioMid:    { value: 0 },
-          audioHigh:   { value: 0 },
-          colorLow:    { value: colorLow },
-          colorHigh:   { value: colorHigh },
-          fogDensity:  { value: toggleValues['fog'] ? 1.0 : 0.0 },
-          opacity:     { value: 1.0 },
+          time:         { value: 0 },
+          heightScale:  { value: heightScale },
+          noiseScale:   { value: noiseScale },
+          scrollOffset: { value: 0 },
+          audioLow:     { value: 0 },
+          audioMid:     { value: 0 },
+          audioHigh:    { value: 0 },
+          colorLow:     { value: colorLow },
+          colorHigh:    { value: colorHigh },
+          fogDensity:   { value: toggleValues['fog'] ? 1.0 : 0.0 },
+          opacity:      { value: 1.0 },
         },
         wireframe: toggleValues['wireframe'] ?? true,
         transparent: true,
@@ -176,7 +181,7 @@ export function createTerrain(): Visualizer {
       group.add(terrainMesh)
 
       // Water plane
-      const waterGeo = new THREE.PlaneGeometry(100, 100)
+      const waterGeo = new THREE.PlaneGeometry(200, 200)
       waterGeo.rotateX(-Math.PI / 2)
       const waterMat = new THREE.MeshBasicMaterial({
         color: 0x003366,
@@ -189,10 +194,10 @@ export function createTerrain(): Visualizer {
       waterMesh.visible = toggleValues['waterPlane'] ?? false
       group.add(waterMesh)
 
-      // Camera above terrain looking forward
+      // Camera above terrain looking forward along -Z
       if (camera) {
-        camera.position.set(0, 15, 40)
-        camera.lookAt(0, 0, 0)
+        camera.position.set(0, 30, 0)
+        camera.rotation.set(-Math.PI * 0.35, 0, 0) // tilt down to see terrain ahead
       }
     },
 
@@ -207,10 +212,14 @@ export function createTerrain(): Visualizer {
       const noiseParam  = (paramValues['noiseScale'] ?? 30) / 100 * 5
       const noiseVal    = Math.max(0.01, noiseParam + patchbay.get('terrNoise') * 5)
 
+      // Accumulate scroll offset for infinite terrain
+      scrollAccum += speedVal * dt * 2.0
+
       const uniforms = terrainMesh.material.uniforms
-      uniforms['time']!.value        = elapsed * speedVal
-      uniforms['heightScale']!.value = heightVal
-      uniforms['noiseScale']!.value  = noiseVal
+      uniforms['time']!.value         = elapsed
+      uniforms['scrollOffset']!.value = scrollAccum
+      uniforms['heightScale']!.value  = heightVal
+      uniforms['noiseScale']!.value   = noiseVal
 
       // Audio bands from patchbay (destinations mapped to audio sources externally)
       uniforms['audioLow']!.value  = patchbay.get('terrHeight') > 0 ? patchbay.get('terrHeight') : 0

@@ -111,9 +111,18 @@ export function PatchTab({ destinations, patches, onPatch, onClearPatch }: Patch
     groups.get(dest.group)!.push(dest)
   }
 
+  // Sort: non-FX groups first, then FX groups at the bottom
+  const sortedEntries = [...groups.entries()].sort((a, b) => {
+    const aIsFX = a[0].startsWith('FX:') || a[0] === 'Post-FX'
+    const bIsFX = b[0].startsWith('FX:') || b[0] === 'Post-FX'
+    if (aIsFX && !bIsFX) return 1
+    if (!aIsFX && bIsFX) return -1
+    return 0
+  })
+
   return html`
     <div class="tc active">
-      ${[...groups.entries()].map(([group, dests]) => html`
+      ${sortedEntries.map(([group, dests]) => html`
         <${Section} title=${group} />
         ${dests.map(dest => html`
           <${PatchRow}

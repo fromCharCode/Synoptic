@@ -3,6 +3,7 @@ import type {
   Visualizer, VisualizerContext, VisualizerParam, VisualizerToggle,
   Patchbay, Destination,
 } from '@core/types'
+import type { AudioAnalyser } from '@input/AudioAnalyser'
 
 // ── Vertex shader (fullscreen quad, no transform needed) ──
 const VERT = /* glsl */`
@@ -129,10 +130,10 @@ export const WAVEFORM_DESTINATIONS: Destination[] = [
 ]
 
 const PARAMS: VisualizerParam[] = [
-  { id: 'lineWidth',  label: 'Line Width', type: 'slider', min: 1,   max: 10,  default: 3,   group: 'Darstellung' },
-  { id: 'layers',     label: 'Layers',     type: 'slider', min: 1,   max: 5,   default: 2,   group: 'Darstellung' },
-  { id: 'smoothing',  label: 'Smoothing',  type: 'slider', min: 0,   max: 100, default: 30,  group: 'Darstellung' },
-  { id: 'layout',     label: 'Layout',     type: 'select', default: 0, group: 'Darstellung',
+  { id: 'lineWidth',  label: 'Line Width', type: 'slider', min: 1,   max: 10,  default: 3,   group: 'Waveform' },
+  { id: 'layers',     label: 'Layers',     type: 'slider', min: 1,   max: 5,   default: 2,   group: 'Waveform' },
+  { id: 'smoothing',  label: 'Smoothing',  type: 'slider', min: 0,   max: 100, default: 30,  group: 'Waveform' },
+  { id: 'layout',     label: 'Layout',     type: 'select', default: 0, group: 'Layout',
     options: [{ value: 0, label: 'Linear' }, { value: 1, label: 'Mirror' }] },
 ]
 
@@ -157,8 +158,8 @@ export function createWaveform(): Visualizer {
   let waveformData: Float32Array | null = null
   let elapsed = 0
 
-  // External audio data hook — caller sets this reference
-  let analyserNode: AnalyserNode | null = null
+  // External audio data hook — set by AudioEngine on window
+  let analyser: AudioAnalyser | null = null
 
   const viz: Visualizer = {
     id: 'waveform',
@@ -206,10 +207,10 @@ export function createWaveform(): Visualizer {
       mesh = new THREE.Mesh(geo, material)
       scene.add(mesh)
 
-      // Try to find analyser node from window (set by AudioEngine)
+      // Try to find analyser from window (set by AudioEngine)
       if (typeof window !== 'undefined') {
-        const w = window as Window & { __synoptikAnalyser?: AnalyserNode }
-        analyserNode = w.__synoptikAnalyser ?? null
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
       }
     },
 
@@ -217,14 +218,20 @@ export function createWaveform(): Visualizer {
       if (!renderer || !scene || !camera || !material || !waveformData || !waveformTex) return
       elapsed += dt
 
+      // Re-check analyser each frame (may become available later)
+      if (!analyser && typeof window !== 'undefined') {
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
+      }
+
       // Update audio data
-      if (analyserNode) {
-        const buf = new Float32Array(analyserNode.fftSize)
-        analyserNode.getFloatTimeDomainData(buf)
-        const step = Math.floor(buf.length / 256)
+      if (analyser) {
+        const tdData = analyser.getTimeDomainData()
+        const step = Math.max(1, Math.floor(tdData.length / 256))
         for (let i = 0; i < 256; i++) {
-          const raw = buf[i * step] ?? 0
-          waveformData[i] = raw * 0.5 + 0.5
+          // TimeDomainData is Uint8Array centered at 128, convert to 0..1
+          const raw = (tdData[i * step] ?? 128) / 255
+          waveformData[i] = raw
         }
         waveformTex.needsUpdate = true
       } else {

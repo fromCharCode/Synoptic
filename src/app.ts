@@ -147,6 +147,12 @@ export function createApp(canvas: HTMLCanvasElement): App {
   const audioEngine = createAudioEngine(bus)
   let audioAnalyser: AudioAnalyser | null = null
 
+  // Expose audioAnalyser globally for visualizers
+  Object.defineProperty(window, '__synoptikAnalyser', {
+    get() { return audioAnalyser },
+    configurable: true,
+  })
+
   // Spotify
   const spotifyPlayer = createSpotifyPlayer(audioEngine, bus)
 
@@ -208,17 +214,37 @@ export function createApp(canvas: HTMLCanvasElement): App {
   fxChain.addPass(createASCIIPass())
   fxChain.addPass(createCRTPass())
 
-  // Register FX params as patchbay destinations
-  const fxDests: Destination[] = fxChain.getParams().map(p => ({
-    id: p.id,
-    label: p.label,
-    group: 'Post-FX',
-    defaultSource: 'none',
-    defaultAmount: 50,
-    min: 0,
-    max: p.max,
-    colorIndex: 7,
-  }))
+  // Register FX params as patchbay destinations with readable labels and sub-categories
+  const FX_GROUP_MAP: Record<string, string> = {
+    bloom: 'FX: Core', chrom: 'FX: Core', grain: 'FX: Core', vig: 'FX: Core',
+    glitch: 'FX: Distortion', pixelsort: 'FX: Distortion', datamosh: 'FX: Distortion', bitcrush: 'FX: Distortion',
+    feedback: 'FX: Feedback', motionblur: 'FX: Feedback', echo: 'FX: Feedback',
+    dof: 'FX: Optical', lensdist: 'FX: Optical', anamorphic: 'FX: Optical', kaleidoscope: 'FX: Optical', mirror: 'FX: Optical',
+    colorgrade: 'FX: Color', invert: 'FX: Color', duotone: 'FX: Color', huerotate: 'FX: Color', monochrome: 'FX: Color',
+    halftone: 'FX: Style', edge: 'FX: Style', ascii: 'FX: Style', crt: 'FX: Style',
+  }
+
+  function makeFXDestLabel(passLabel: string, paramLabel: string): string {
+    return `${passLabel} ${paramLabel}`
+  }
+
+  const fxDests: Destination[] = []
+  for (const pass of fxChain.getPasses()) {
+    const passPrefix = pass.id
+    const fxGroup = FX_GROUP_MAP[passPrefix] ?? 'FX: Other'
+    for (const p of pass.params) {
+      fxDests.push({
+        id: p.id,
+        label: makeFXDestLabel(pass.label, p.label),
+        group: fxGroup,
+        defaultSource: 'none',
+        defaultAmount: 50,
+        min: 0,
+        max: p.max,
+        colorIndex: 7,
+      })
+    }
+  }
   patchbay.registerDestinations(fxDests)
 
   // ── Spectrum Ring (2D overlay) ──
@@ -681,6 +707,7 @@ export function createApp(canvas: HTMLCanvasElement): App {
       spotifyPlayer,
       get audioAnalyser() { return audioAnalyser },
       getFXPasses(): FXPass[] { return fxChain.getPasses() },
+      getLFOPhases(): number[] { return lfos.map(l => l.phase) },
     }
   }
 

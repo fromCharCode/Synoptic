@@ -3,6 +3,7 @@ import type {
   Visualizer, VisualizerContext, VisualizerParam, VisualizerToggle,
   Patchbay, Destination,
 } from '@core/types'
+import type { AudioAnalyser } from '@input/AudioAnalyser'
 
 const VERT = /* glsl */`
 varying vec2 vUv;
@@ -139,7 +140,7 @@ export function createLissajous(): Visualizer {
   let trailTex: THREE.DataTexture | null = null
   // RGBA (4 components): xy = position, z = age, w = unused
   let trailData: Float32Array | null = null
-  let analyserNode: AnalyserNode | null = null
+  let analyser: AudioAnalyser | null = null
   let elapsed = 0
   // Ring buffer index for trail
   let writeIdx = 0
@@ -186,14 +187,20 @@ export function createLissajous(): Visualizer {
       scene.add(mesh)
 
       if (typeof window !== 'undefined') {
-        const w = window as Window & { __synoptikAnalyser?: AnalyserNode }
-        analyserNode = w.__synoptikAnalyser ?? null
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
       }
     },
 
     update(dt: number, patchbay: Patchbay) {
       if (!renderer || !scene || !camera || !material || !trailData || !trailTex) return
       elapsed += dt
+
+      // Re-check analyser each frame (may become available later)
+      if (!analyser && typeof window !== 'undefined') {
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
+      }
 
       const freqX = (paramValues['freqX'] ?? 3) + patchbay.get('ljFreqX')
       const freqY = (paramValues['freqY'] ?? 2) + patchbay.get('ljFreqY')
@@ -203,15 +210,14 @@ export function createLissajous(): Visualizer {
       let x = 0
       let y = 0
 
-      if (analyserNode) {
-        // Use actual audio: take two channels worth of waveform
-        const buf = new Float32Array(analyserNode.fftSize)
-        analyserNode.getFloatTimeDomainData(buf)
-        // Use sample at writeIdx position for X, offset by half buffer for Y
-        const half = Math.floor(buf.length / 2)
-        const idx = (writeIdx * 2) % buf.length
-        x = buf[idx] ?? 0
-        y = buf[(idx + half) % buf.length] ?? 0
+      if (analyser) {
+        // Use actual audio time-domain data for X/Y
+        const tdData = analyser.getTimeDomainData()
+        const half = Math.floor(tdData.length / 2)
+        const idx = (writeIdx * 2) % tdData.length
+        // Convert from 0-255 (centered at 128) to -1..1
+        x = ((tdData[idx] ?? 128) - 128) / 128
+        y = ((tdData[(idx + half) % tdData.length] ?? 128) - 128) / 128
       } else {
         // Lissajous figure from math
         x = Math.sin(freqX * elapsed + phase)

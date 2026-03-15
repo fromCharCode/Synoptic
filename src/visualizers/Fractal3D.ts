@@ -3,6 +3,7 @@ import type {
   Visualizer, VisualizerContext, VisualizerParam, VisualizerToggle,
   Patchbay, Destination,
 } from '@core/types'
+import type { AudioAnalyser } from '@input/AudioAnalyser'
 
 // ── Pre-allocated temporaries (zero GC in render loop) ──
 const _color = new THREE.Color()
@@ -149,6 +150,7 @@ export function createFractal3D(): Visualizer {
 
   let mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> | null = null
   let scene: THREE.Scene | null = null
+  let analyser: AudioAnalyser | null = null
   let elapsed = 0
 
   return {
@@ -191,29 +193,55 @@ export function createFractal3D(): Visualizer {
       mesh = new THREE.Mesh(geo, mat)
       mesh.renderOrder = -1
       scene.add(mesh)
+
+      if (typeof window !== 'undefined') {
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
+      }
     },
 
     update(dt: number, patchbay: Patchbay) {
       if (!mesh) return
       if (toggleValues['animate']) elapsed += dt
 
+      // Re-check analyser each frame (may become available later)
+      if (!analyser && typeof window !== 'undefined') {
+        const w = window as unknown as { __synoptikAnalyser?: AudioAnalyser }
+        analyser = w.__synoptikAnalyser ?? null
+      }
+
+      // Get direct audio modulation values
+      let bassVal = 0
+      let centroidVal = 0
+      let energyVal = 0
+      if (analyser) {
+        const bands = analyser.getBands()
+        const analysis = analyser.getAnalysis()
+        bassVal = (bands[0] ?? 0) + (bands[1] ?? 0)  // sub + bass
+        centroidVal = analysis.centroid
+        energyVal = analysis.energy
+      }
+
       const uniforms = mesh.material.uniforms
 
       uniforms['time']!.value       = elapsed
-      uniforms['power']!.value      = Math.max(2, Math.min(16, (paramValues['power'] ?? 8) + patchbay.get('fPower') * 4))
+      // Power responds to bass (via patchbay or direct audio)
+      const powerMod = patchbay.get('fPower') * 4 + bassVal * 2.0
+      uniforms['power']!.value      = Math.max(2, Math.min(16, (paramValues['power'] ?? 8) + powerMod))
       uniforms['bailout']!.value    = Math.max(1, (paramValues['bailout'] ?? 40) / 10 + patchbay.get('fBailout'))
       uniforms['iterations']!.value = Math.round(paramValues['iterations'] ?? 8)
       uniforms['epsilon']!.value    = paramValues['epsilon'] ?? 5
 
-      // Color
+      // Color — spectral centroid shifts hue
       _color.setHSL(0.6, 1.0, 0.5)
       _color.getHSL(_hsl)
-      let h = _hsl.h + patchbay.get('fHue')
+      let h = _hsl.h + patchbay.get('fHue') + centroidVal * 0.3
       if (h > 1) h -= Math.floor(h)
       if (h < 0) h += Math.ceil(-h)
       uniforms['hue']!.value = h
 
-      uniforms['glow']!.value  = Math.max(0, patchbay.get('fGlow'))
+      // Glow responds to energy
+      uniforms['glow']!.value  = Math.max(0, patchbay.get('fGlow') + energyVal * 0.5)
       uniforms['slice']!.value = patchbay.get('fSlice')
 
       uniforms['colorByIteration']!.value = toggleValues['colorByIteration'] ?? true
