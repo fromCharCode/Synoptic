@@ -1,9 +1,8 @@
 import { defineConfig } from 'vite'
-import basicSsl from '@vitejs/plugin-basic-ssl'
 import { resolve } from 'path'
+import { readFileSync } from 'fs'
 
 export default defineConfig({
-  plugins: [basicSsl()],
   resolve: {
     alias: {
       '@core': resolve(__dirname, 'src/core'),
@@ -18,7 +17,10 @@ export default defineConfig({
     },
   },
   server: {
-    https: true,
+    https: {
+      cert: readFileSync(resolve(__dirname, 'certs/localhost+1.pem')),
+      key: readFileSync(resolve(__dirname, 'certs/localhost+1-key.pem')),
+    },
     port: 5173,
     strictPort: true,
   },

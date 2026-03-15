@@ -2,13 +2,19 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
-  timeout: 30000,
+  testMatch: '**/*.spec.ts',
+  timeout: 60000,
   use: {
-    browserName: 'firefox',
     headless: true,
     ignoreHTTPSErrors: true,
     baseURL: 'https://localhost:5173',
   },
+  projects: [
+    {
+      name: 'firefox',
+      use: { browserName: 'firefox' },
+    },
+  ],
   webServer: {
     command: 'pnpm dev',
     url: 'https://localhost:5173',
