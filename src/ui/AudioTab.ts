@@ -111,6 +111,11 @@ export function AudioTab({
             style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:7px;padding:2px 8px;border-radius:3px;cursor:pointer;"
           >${youtubeIsPlaying ? 'Pause' : 'Play'}</button>
         </div>
+        ${youtubeIsPlaying && !isActive ? html`
+          <div style="font-size:7px;color:var(--a4);margin:4px 0;padding:4px 6px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:3px;line-height:1.5;">
+            Audio-Analyse nicht verbunden. Klicke oben auf <strong>"Tab / System Audio"</strong> und wähle diesen Tab, um die Visualisierungen mit YouTube zu verbinden.
+          </div>
+        ` : null}
       ` : null}
 
       <${Section} title="Frequenz-Bander" />

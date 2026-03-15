@@ -82,13 +82,21 @@ function loadIframeAPI(): Promise<YTNamespace> {
 }
 
 async function tryTabCapture(audioEngine: AudioEngine, bus: Bus): Promise<void> {
-  // Use the standard tab capture method — works in Firefox and Chrome.
-  // The user will be prompted to select a tab/window, then audio is
-  // routed through analyser AND to speakers.
+  // If already connected, skip
+  if (audioEngine.isActive) return
+
+  // Short delay to let YouTube start playback first
+  await new Promise(r => setTimeout(r, 1500))
+
+  // If user already connected audio manually in the meantime, skip
+  if (audioEngine.isActive) return
+
+  // Trigger tab capture — user will be prompted to share tab audio
   try {
     await audioEngine.connectTabCapture()
   } catch {
-    bus.emit('error', { source: 'youtube', message: 'Tab-Audio-Capture fehlgeschlagen — bitte manuell über Audio Tab verbinden' })
+    // Don't show error — user might have cancelled the prompt.
+    // They can always manually connect via the Audio Tab button.
   }
 }
 
