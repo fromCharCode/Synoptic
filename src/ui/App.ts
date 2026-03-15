@@ -26,6 +26,7 @@ export interface AppInterface {
   macros: App['macros']
   registry: Registry
   spotifyPlayer: App['spotifyPlayer']
+  youtubePlayer: App['youtubePlayer']
   audioAnalyser: App['audioAnalyser']
   getFXPasses: () => FXPass[]
   getLFOPhases: () => number[]
@@ -159,6 +160,18 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
     app.audioEngine.disconnect()
   }, [app])
 
+  const handleYouTubeLoad = useCallback((url: string) => {
+    app.youtubePlayer.loadVideo(url)
+  }, [app])
+
+  const handleYouTubePlay = useCallback(() => {
+    app.youtubePlayer.play()
+  }, [app])
+
+  const handleYouTubePause = useCallback(() => {
+    app.youtubePlayer.pause()
+  }, [app])
+
   const handleFXParam = useCallback((paramId: string, value: number) => {
     state.setFXParam(paramId, value)
   }, [state])
@@ -255,6 +268,11 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
           onAudioGain=${state.setAudioGain}
           onAudioSmoothing=${state.setAudioSmoothing}
           onBeatSensitivity=${state.setBeatSensitivity}
+          onYouTubeLoad=${handleYouTubeLoad}
+          onYouTubePlay=${handleYouTubePlay}
+          onYouTubePause=${handleYouTubePause}
+          youtubeTitle=${app.youtubePlayer.videoTitle}
+          youtubeIsPlaying=${app.youtubePlayer.isPlaying}
         />`
       case 'FX':
         return html`<${FXTab}

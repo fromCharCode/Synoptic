@@ -20,6 +20,7 @@ export default defineConfig({
   server: {
     https: true,
     port: 5173,
+    strictPort: true,
   },
   appType: 'spa',
 })

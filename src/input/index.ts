@@ -4,3 +4,5 @@ export { createAudioAnalyser, BANDS, computeBands, computeAnalysis } from './Aud
 export type { AudioAnalyser, AnalysisResult } from './AudioAnalyser'
 export { createSpotifyPlayer } from './SpotifyPlayer'
 export type { SpotifyPlayer } from './SpotifyPlayer'
+export { createYouTubePlayer } from './YouTubePlayer'
+export type { YouTubePlayer } from './YouTubePlayer'

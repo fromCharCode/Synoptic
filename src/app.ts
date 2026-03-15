@@ -9,6 +9,7 @@ import { createMacro } from '@modular/Macros'
 import { createAudioEngine } from '@input/AudioEngine'
 import { createAudioAnalyser, BANDS } from '@input/AudioAnalyser'
 import { createSpotifyPlayer } from '@input/SpotifyPlayer'
+import { createYouTubePlayer } from '@input/YouTubePlayer'
 import { createSceneManager } from '@scene/SceneManager'
 import { createStore } from '@state/store'
 import { createFXChain } from '@postfx/FXChain'
@@ -66,6 +67,7 @@ import type { Macro } from '@modular/Macros'
 import type { AudioEngine } from '@input/AudioEngine'
 import type { AudioAnalyser } from '@input/AudioAnalyser'
 import type { SpotifyPlayer } from '@input/SpotifyPlayer'
+import type { YouTubePlayer } from '@input/YouTubePlayer'
 import type { SceneManager } from '@scene/SceneManager'
 import type { FXChain } from '@postfx/FXChain'
 import type { Store } from '@state/store'
@@ -81,6 +83,7 @@ export interface App {
   audioEngine: AudioEngine
   audioAnalyser: AudioAnalyser | null
   spotifyPlayer: SpotifyPlayer
+  youtubePlayer: YouTubePlayer
   sceneManager: SceneManager
   patchbay: Patchbay
   lfos: LFO[]
@@ -169,6 +172,9 @@ export function createApp(canvas: HTMLCanvasElement): App {
 
   // Spotify
   const spotifyPlayer = createSpotifyPlayer(audioEngine, bus)
+
+  // YouTube
+  const youtubePlayer = createYouTubePlayer(audioEngine, bus)
 
   // Modulators
   const lfos: LFO[] = [
@@ -765,6 +771,7 @@ export function createApp(canvas: HTMLCanvasElement): App {
       macros,
       registry,
       spotifyPlayer,
+      youtubePlayer,
       get audioAnalyser() { return audioAnalyser },
       getFXPasses(): FXPass[] { return fxChain.getPasses() },
       getLFOPhases(): number[] { return lfos.map(l => l.phase) },
@@ -785,6 +792,7 @@ export function createApp(canvas: HTMLCanvasElement): App {
       document.body.removeEventListener('dragleave', onDragLeave)
       document.body.removeEventListener('drop', onDrop)
       activeVisualizer.dispose()
+      youtubePlayer.destroy()
       fxChain.dispose()
       sceneManager.renderer.dispose()
     },
@@ -797,6 +805,7 @@ export function createApp(canvas: HTMLCanvasElement): App {
     audioEngine,
     get audioAnalyser() { return audioAnalyser },
     spotifyPlayer,
+    youtubePlayer,
     sceneManager,
     patchbay,
     lfos,

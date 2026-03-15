@@ -1,4 +1,5 @@
 import { h } from 'preact'
+import { useState, useCallback } from 'preact/hooks'
 import htm from 'htm'
 import { Section, AudioButton, MeterBar, Slider } from './controls'
 
@@ -30,6 +31,11 @@ export interface AudioTabProps {
   onAudioGain: (v: number) => void
   onAudioSmoothing: (v: number) => void
   onBeatSensitivity: (v: number) => void
+  onYouTubeLoad: (url: string) => void
+  onYouTubePlay: () => void
+  onYouTubePause: () => void
+  youtubeTitle: string | null
+  youtubeIsPlaying: boolean
 }
 
 export function AudioTab({
@@ -37,8 +43,18 @@ export function AudioTab({
   audioGain, audioSmoothing, beatSensitivity,
   onConnectMic, onConnectTab, onConnectFile, onConnectSpotify, onDisconnect,
   onAudioGain, onAudioSmoothing, onBeatSensitivity,
+  onYouTubeLoad, onYouTubePlay, onYouTubePause,
+  youtubeTitle, youtubeIsPlaying,
 }: AudioTabProps) {
   const isActive = audioMode !== null
+  const [ytUrl, setYtUrl] = useState('')
+
+  const handleYtLoad = useCallback(() => {
+    if (ytUrl.trim()) {
+      onYouTubeLoad(ytUrl.trim())
+      setYtUrl('')
+    }
+  }, [ytUrl, onYouTubeLoad])
 
   const handleFileClick = () => {
     const input = document.createElement('input')
@@ -66,6 +82,36 @@ export function AudioTab({
       <div style="font-size:7px;color:var(--fd);letter-spacing:1px;margin:6px 0 2px;text-align:center;">
         ${isActive ? `Verbunden: ${audioMode?.toUpperCase() ?? ''}` : 'Nicht verbunden'}
       </div>
+      <div style="font-size:6px;color:var(--fd);letter-spacing:0.5px;margin:2px 0 4px;text-align:center;opacity:0.6;">
+        Spotify: https://localhost:5173/callback in Dashboard registrieren
+      </div>
+
+      <${Section} title="YouTube" />
+      <div style="display:flex;gap:4px;margin:4px 0;">
+        <input
+          type="text"
+          placeholder="YouTube URL oder Video-ID"
+          value=${ytUrl}
+          onInput=${(e: Event) => setYtUrl((e.target as HTMLInputElement).value)}
+          onKeyDown=${(e: KeyboardEvent) => { if (e.key === 'Enter') handleYtLoad() }}
+          style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:8px;padding:3px 6px;border-radius:3px;outline:none;"
+        />
+        <button
+          onClick=${handleYtLoad}
+          style="background:rgba(255,0,0,0.3);border:1px solid rgba(255,0,0,0.4);color:#fff;font-size:7px;padding:3px 8px;border-radius:3px;cursor:pointer;white-space:nowrap;"
+        >Laden</button>
+      </div>
+      ${youtubeTitle ? html`
+        <div style="font-size:7px;color:var(--fd);margin:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          ${'▶ ' + youtubeTitle}
+        </div>
+        <div style="display:flex;gap:4px;margin:2px 0;">
+          <button
+            onClick=${youtubeIsPlaying ? onYouTubePause : onYouTubePlay}
+            style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;font-size:7px;padding:2px 8px;border-radius:3px;cursor:pointer;"
+          >${youtubeIsPlaying ? 'Pause' : 'Play'}</button>
+        </div>
+      ` : null}
 
       <${Section} title="Frequenz-Bander" />
       <div class="mg">
