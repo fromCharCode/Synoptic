@@ -3,14 +3,14 @@ import { test, expect } from '@playwright/test'
 test.describe('HTTPS & Spotify', () => {
 
   test('server runs on HTTPS with valid certificate', async ({ page }) => {
-    const response = await page.goto('https://localhost:5173', { waitUntil: 'networkidle' })
+    const response = await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
 
     // Verify we got a response
     expect(response).not.toBeNull()
     expect(response!.status()).toBe(200)
 
-    // Verify URL is HTTPS
-    expect(page.url()).toMatch(/^https:\/\/localhost:5173/)
+    // Verify URL (HTTP for dev — localhost is a secure context)
+    expect(page.url()).toMatch(/^http:\/\/localhost:5173/)
 
     // Verify the app loaded (canvas exists)
     const canvas = page.locator('canvas#gl')
@@ -20,16 +20,16 @@ test.describe('HTTPS & Spotify', () => {
   })
 
   test('Spotify auth redirect URL is correct', async ({ page }) => {
-    await page.goto('https://localhost:5173', { waitUntil: 'networkidle' })
+    await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
     await page.waitForTimeout(2000)
 
     // Check the Spotify redirect URI that would be used
     const redirectUri = await page.evaluate(() => {
       // SpotifyPlayer uses hardcoded redirect URI
-      return 'https://localhost:5173/callback'
+      return 'http://localhost:5173/callback'
     })
     console.log('Spotify Redirect URI:', redirectUri)
-    expect(redirectUri).toBe('https://localhost:5173/callback')
+    expect(redirectUri).toBe('http://localhost:5173/callback')
 
     // Verify the Client ID is available from env
     const hasClientId = await page.evaluate(() => {
@@ -44,7 +44,7 @@ test.describe('HTTPS & Spotify', () => {
     const errors: string[] = []
     page.on('pageerror', err => errors.push(err.message))
 
-    await page.goto('https://localhost:5173', { waitUntil: 'networkidle' })
+    await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
     await page.waitForTimeout(2000)
 
     // Open panel
@@ -73,7 +73,7 @@ test.describe('HTTPS & Spotify', () => {
       // Verify the auth URL contains correct parameters
       expect(authUrl).toContain('accounts.spotify.com/authorize')
       expect(authUrl).toContain('client_id=e146e822fbd742ab8e5ad1f34fe7ea07')
-      expect(authUrl).toContain('redirect_uri=https%3A%2F%2Flocalhost%3A5173%2Fcallback')
+      expect(authUrl).toContain('redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fcallback')
       expect(authUrl).toContain('response_type=code')
       expect(authUrl).toContain('code_challenge_method=S256')
 
@@ -86,7 +86,7 @@ test.describe('HTTPS & Spotify', () => {
 
   test('Spotify callback handler works', async ({ page }) => {
     // Simulate returning from Spotify with a fake code
-    await page.goto('https://localhost:5173/callback?code=fake_test_code', {
+    await page.goto('http://localhost:5173/callback?code=fake_test_code', {
       waitUntil: 'networkidle',
     })
     await page.waitForTimeout(3000)
@@ -109,7 +109,7 @@ test.describe('HTTPS & Spotify', () => {
   })
 
   test('audio engine is initialized and analyser exposed', async ({ page }) => {
-    await page.goto('https://localhost:5173', { waitUntil: 'networkidle' })
+    await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
     await page.waitForTimeout(2000)
 
     // Check initial audio state

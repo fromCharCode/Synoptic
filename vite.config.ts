@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
-import { readFileSync } from 'fs'
 
 export default defineConfig({
   resolve: {
@@ -17,10 +16,9 @@ export default defineConfig({
     },
   },
   server: {
-    https: {
-      cert: readFileSync(resolve(__dirname, 'certs/localhost+1.pem')),
-      key: readFileSync(resolve(__dirname, 'certs/localhost+1-key.pem')),
-    },
+    // HTTP for dev — localhost is a "secure context" in all browsers,
+    // so Web Audio API, getUserMedia, getDisplayMedia, and Spotify SDK all work.
+    // Spotify requires http:// redirect URI for localhost.
     port: 5173,
     strictPort: true,
   },

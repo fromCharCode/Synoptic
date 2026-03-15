@@ -7,7 +7,7 @@ export default defineConfig({
   use: {
     headless: true,
     ignoreHTTPSErrors: true,
-    baseURL: 'https://localhost:5173',
+    baseURL: 'http://localhost:5173',
   },
   projects: [
     {
@@ -17,9 +17,8 @@ export default defineConfig({
   ],
   webServer: {
     command: 'pnpm dev',
-    url: 'https://localhost:5173',
+    url: 'http://localhost:5173',
     reuseExistingServer: true,
-    ignoreHTTPSErrors: true,
     timeout: 15000,
   },
 })

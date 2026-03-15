@@ -12,8 +12,9 @@ export interface SpotifyPlayer {
 }
 
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID as string
-// Hardcoded to match the Spotify dashboard registration — Vite uses strictPort: true
-const REDIRECT_URI = 'https://localhost:5173/callback'
+// Spotify requires http:// for localhost (https://localhost is rejected as "insecure")
+// Register http://localhost:5173/callback in Spotify Dashboard
+const REDIRECT_URI = 'http://localhost:5173/callback'
 const SCOPES = 'streaming user-read-playback-state user-modify-playback-state'
 
 function generateRandomString(length: number): string {

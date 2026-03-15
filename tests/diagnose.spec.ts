@@ -4,7 +4,7 @@ test.describe('Synoptik Audio Diagnostics', () => {
 
   test('page loads and renders canvas', async ({ page }) => {
     // Accept self-signed cert
-    await page.goto('https://localhost:5173', { waitUntil: 'networkidle' })
+    await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
 
     // Check canvas exists
     const canvas = page.locator('canvas#gl')
@@ -32,7 +32,7 @@ test.describe('Synoptik Audio Diagnostics', () => {
       errors.push(`PAGE ERROR: ${err.message}`)
     })
 
-    await page.goto('https://localhost:5173', { waitUntil: 'networkidle' })
+    await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
     await page.waitForTimeout(2000)
 
     console.log('=== CONSOLE LOGS ===')
@@ -49,7 +49,7 @@ test.describe('Synoptik Audio Diagnostics', () => {
   })
 
   test('check AudioEngine state via window.synoptik', async ({ page }) => {
-    await page.goto('https://localhost:5173', { waitUntil: 'networkidle' })
+    await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
     await page.waitForTimeout(2000)
 
     // Check if synoptik app is exposed on window
@@ -88,7 +88,7 @@ test.describe('Synoptik Audio Diagnostics', () => {
     })
     page.on('pageerror', err => errors.push(`PAGE ERROR: ${err.message}`))
 
-    await page.goto('https://localhost:5173', { waitUntil: 'networkidle' })
+    await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
     await page.waitForTimeout(2000)
 
     // Open panel
@@ -169,7 +169,7 @@ test.describe('Synoptik Audio Diagnostics', () => {
       if (msg.type() === 'error') errors.push(msg.text())
     })
 
-    await page.goto('https://localhost:5173', { waitUntil: 'networkidle' })
+    await page.goto('http://localhost:5173', { waitUntil: 'networkidle' })
     await page.waitForTimeout(2000)
 
     // Open panel > Audio tab

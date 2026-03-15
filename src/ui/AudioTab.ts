@@ -83,7 +83,7 @@ export function AudioTab({
         ${isActive ? `Verbunden: ${audioMode?.toUpperCase() ?? ''}` : 'Nicht verbunden'}
       </div>
       <div style="font-size:6px;color:var(--fd);letter-spacing:0.5px;margin:2px 0 4px;text-align:center;opacity:0.6;">
-        Spotify: https://localhost:5173/callback in Dashboard registrieren
+        Spotify: http://localhost:5173/callback in Dashboard registrieren
       </div>
 
       <${Section} title="YouTube" />
