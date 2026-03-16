@@ -16,12 +16,19 @@ export interface SceneManager {
   readonly kGroup: THREE.Group
   readonly clippingPlane: THREE.Plane
   readonly lights: {
+    ambient: THREE.AmbientLight
     key: THREE.DirectionalLight
     fill: THREE.DirectionalLight
     rim: THREE.PointLight
     warm: THREE.PointLight
     beat: THREE.PointLight
   }
+  setCamDistance(dist: number): void
+  // Base setters — UI sliders set these; patchbay modulation is added on top in update()
+  setAmbientBase(intensity: number): void
+  setKeyLightBase(intensity: number): void
+  setFillLightBase(intensity: number): void
+  setExposureBase(value: number): void
   resize(width: number, height: number): void
   update(dt: number, patchbay: Patchbay, mouseX: number, mouseY: number, styleId: string): void
   updateCubeMap(): void
@@ -40,9 +47,13 @@ export function createSceneManager(canvas: HTMLCanvasElement): SceneManager {
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.3
+  renderer.toneMappingExposure = 2.0
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.localClippingEnabled = true
+
+  // THREE.js r170+ uses physically correct lights by default.
+  // Diffuse BRDF = albedo/π, so same intensity values from r128 produce ~π times less diffuse light.
+  // Boost all intensities by ~π (≈3.14) to match the original prototype (klein-bottle-v4) visuals.
 
   const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(256)
   const cubeCamera = new THREE.CubeCamera(0.1, 100, cubeRenderTarget)
@@ -50,25 +61,26 @@ export function createSceneManager(canvas: HTMLCanvasElement): SceneManager {
 
   const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
     format: THREE.RGBAFormat,
+    depthTexture: new THREE.DepthTexture(window.innerWidth, window.innerHeight),
   })
 
-  // Lighting rig
-  const ambient = new THREE.AmbientLight(0x1a1a2e, 0.5)
+  // Lighting rig — intensities boosted ~3× for THREE.js r170+ physical light normalization
+  const ambient = new THREE.AmbientLight(0x334466, 6.0)
   scene.add(ambient)
 
-  const keyLight = new THREE.DirectionalLight(0xffeedd, 0.9)
+  const keyLight = new THREE.DirectionalLight(0xffeedd, 8.0)
   keyLight.position.set(5, 8, 6)
   scene.add(keyLight)
 
-  const fillLight = new THREE.DirectionalLight(0x6688cc, 0.35)
+  const fillLight = new THREE.DirectionalLight(0x6688cc, 3.0)
   fillLight.position.set(-4, 3, -5)
   scene.add(fillLight)
 
-  const rimLight = new THREE.PointLight(0x4488ff, 0.5, 30)
+  const rimLight = new THREE.PointLight(0x4488ff, 5.0, 30)
   rimLight.position.set(-3, -4, 6)
   scene.add(rimLight)
 
-  const warmLight = new THREE.PointLight(0xff8844, 0.3, 25)
+  const warmLight = new THREE.PointLight(0xff8844, 2.0, 25)
   warmLight.position.set(6, 2, -4)
   scene.add(warmLight)
 
@@ -78,17 +90,31 @@ export function createSceneManager(canvas: HTMLCanvasElement): SceneManager {
   const kGroup = new THREE.Group()
   scene.add(kGroup)
 
-  const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+  const clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 100)
+
+  let baseCamDist = 8
+  let _ambientBase = 6.0
+  let _keyBase = 8.0
+  let _fillBase = 3.0
+  let _exposureBase = 2.0
 
   const mgr: SceneManager = {
     scene, camera, renderer, cubeCamera, cubeRenderTarget, renderTarget, kGroup, clippingPlane,
-    lights: { key: keyLight, fill: fillLight, rim: rimLight, warm: warmLight, beat: beatLight },
+    lights: { ambient, key: keyLight, fill: fillLight, rim: rimLight, warm: warmLight, beat: beatLight },
+
+    setCamDistance(dist: number) { baseCamDist = dist },
+    setAmbientBase(intensity: number) { _ambientBase = intensity },
+    setKeyLightBase(intensity: number) { _keyBase = intensity },
+    setFillLightBase(intensity: number) { _fillBase = intensity },
+    setExposureBase(value: number) { _exposureBase = value },
 
     resize(width: number, height: number) {
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       renderer.setSize(width, height)
       renderTarget.setSize(width, height)
+      if (renderTarget.depthTexture) renderTarget.depthTexture.dispose()
+      renderTarget.depthTexture = new THREE.DepthTexture(width, height)
     },
 
     update(dt: number, patchbay: Patchbay, mouseX: number, mouseY: number, styleId: string) {
@@ -97,7 +123,7 @@ export function createSceneManager(canvas: HTMLCanvasElement): SceneManager {
       // Camera mouse tracking
       camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.02
       camera.position.y += (1.5 + mouseY * -0.5 - camera.position.y) * 0.02
-      camera.position.z += (8 + patchbay.get('cDist') - camera.position.z) * 0.03
+      camera.position.z += (baseCamDist + patchbay.get('cDist') - camera.position.z) * 0.03
 
       // Camera shake
       const shake = patchbay.get('cShk')
@@ -115,16 +141,17 @@ export function createSceneManager(canvas: HTMLCanvasElement): SceneManager {
       // Fog
       ;(scene.fog as THREE.FogExp2).density = Math.max(0, style.fogDensity + patchbay.get('fog'))
 
-      // Tone mapping exposure
-      renderer.toneMappingExposure = 1.3 + patchbay.get('exp')
+      // Tone mapping exposure — base set from UI slider via setExposureBase()
+      renderer.toneMappingExposure = _exposureBase + patchbay.get('exp')
 
-      // Beat light
+      // Beat light decay
       beatLight.intensity *= 0.9
 
-      // Light modulation
-      keyLight.intensity = 0.9 + patchbay.get('keyInt')
-      fillLight.intensity = 0.35 + patchbay.get('fillInt')
-      rimLight.intensity = 0.5 + patchbay.get('rimInt')
+      // Light modulation — base set from UI sliders via setters; patchbay adds on top
+      ambient.intensity = _ambientBase
+      keyLight.intensity = _keyBase + patchbay.get('keyInt')
+      fillLight.intensity = _fillBase + patchbay.get('fillInt')
+      rimLight.intensity = 5.0 + patchbay.get('rimInt')
 
       // Light hue modulation
       const keyHueMod = patchbay.get('keyHue')
