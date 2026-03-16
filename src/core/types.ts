@@ -102,6 +102,7 @@ export interface FXPass {
   enabled: boolean
   order: number
   params: FXParam[]
+  extraUniforms?: Record<string, THREE.IUniform>
   init(renderer: THREE.WebGLRenderer, width: number, height: number): void
   resize(width: number, height: number): void
   render(

@@ -60,6 +60,7 @@ export function createBasePass(config: PassConfig): FXPass {
     enabled: true,
     order: config.order,
     params: config.params,
+    extraUniforms: config.extraUniforms,
 
     init(renderer, width, height) {
       uniforms['resolution']!.value.set(width, height)
@@ -91,7 +92,11 @@ export function createBasePass(config: PassConfig): FXPass {
     },
 
     isActive() {
-      return config.params.some(p => Math.abs(p.value) > 0.001)
+      // Only check the first param (primary intensity/amount control).
+      // Secondary params (threshold, radius, tint, etc.) have non-zero defaults
+      // but should not activate the pass when the primary control is zero.
+      const primary = config.params[0]
+      return primary !== undefined && Math.abs(primary.value) > 0.001
     },
 
     dispose() {
