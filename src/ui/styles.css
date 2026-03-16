@@ -18,8 +18,11 @@ canvas#fx{position:fixed;top:0;left:0;z-index:2;pointer-events:none;}
 .tab.active{color:var(--ac);border-bottom-color:var(--ac);}
 .tc{display:none;flex:1;overflow-y:auto;padding:14px 12px;scrollbar-width:thin;scrollbar-color:var(--fg2) transparent;}
 .tc.active{display:block;}
-#pt{position:fixed;top:16px;right:16px;z-index:200;width:36px;height:36px;background:var(--pbg);border:1px solid var(--pbr);backdrop-filter:blur(20px);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s;opacity:0;}
-body:hover #pt,body.su #pt{opacity:1;}
+#pt{position:fixed;top:16px;right:16px;z-index:200;width:36px;height:36px;background:var(--pbg);border:1px solid var(--pbr);backdrop-filter:blur(20px);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.3s;opacity:1;}
+:fullscreen #pt,:-webkit-full-screen #pt{opacity:0;pointer-events:none;}
+#pp{position:fixed;top:16px;left:16px;z-index:200;width:36px;height:36px;background:var(--pbg);border:1px solid var(--pbr);backdrop-filter:blur(20px);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all 0.3s;user-select:none;}
+#pp:hover{background:rgba(255,255,255,0.06);}
+:fullscreen #pp,:-webkit-full-screen #pp{opacity:0;pointer-events:none;}
 #pt:hover{background:rgba(255,255,255,0.06);cursor:pointer;}
 #pt svg{width:16px;height:16px;stroke:var(--fd);fill:none;stroke-width:1.5;}
 #panel.open~#pt{right:352px;}

@@ -55,8 +55,9 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
     bands: Float32Array | null
     analysis: NonNullable<Parameters<typeof AudioTab>[0]['analysis']> | null
     mode: string | null
+    isPaused: boolean
     lfoPhases: number[]
-  }>({ bands: null, analysis: null, mode: null, lfoPhases: [] })
+  }>({ bands: null, analysis: null, mode: null, isPaused: false, lfoPhases: [] })
 
   // Poll audio state at ~15fps for meters
   useEffect(() => {
@@ -69,17 +70,20 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
 
       const lfoPhases = app.getLFOPhases()
       const analyser = app.audioAnalyser
+      const engineMode = app.audioEngine.mode
+      const enginePaused = app.audioEngine.isPaused
       if (analyser) {
         setAudioLive({
           bands: analyser.getBands(),
           analysis: analyser.getAnalysis(),
-          mode: app.audioEngine.mode,
+          mode: engineMode,
+          isPaused: enginePaused,
           lfoPhases,
         })
       } else {
         setAudioLive(prev => {
-          if (prev.mode !== app.audioEngine.mode || prev.lfoPhases !== lfoPhases) {
-            return { bands: null, analysis: null, mode: app.audioEngine.mode, lfoPhases }
+          if (prev.mode !== engineMode || prev.isPaused !== enginePaused || prev.lfoPhases !== lfoPhases) {
+            return { bands: null, analysis: null, mode: engineMode, isPaused: enginePaused, lfoPhases }
           }
           return prev
         })
@@ -158,6 +162,14 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
 
   const handleDisconnect = useCallback(() => {
     app.audioEngine.disconnect()
+  }, [app])
+
+  const handlePause = useCallback(() => {
+    app.audioEngine.pause()
+  }, [app])
+
+  const handleResume = useCallback(() => {
+    app.audioEngine.resume()
   }, [app])
 
   const handleYouTubeLoad = useCallback((url: string) => {
@@ -300,6 +312,12 @@ export function AppUI({ store, app }: { store: Store; app: AppInterface }) {
 
   return html`
     <${PanelToggle} onClick=${handleTogglePanel} />
+    ${audioLive.mode !== null ? html`
+      <div id="pp" onClick=${audioLive.isPaused ? handleResume : handlePause}
+        title=${audioLive.isPaused ? 'Wiedergabe fortsetzen' : 'Pause'}>
+        ${audioLive.isPaused ? '▶' : '⏸'}
+      </div>
+    ` : null}
     <${Panel}
       tabs=${TABS}
       activeTab=${state.activeTab}
