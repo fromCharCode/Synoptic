@@ -8,6 +8,7 @@ import {
   createMainMaterial, createWireMaterial, createInnerMaterial,
   createParticleMaterial, STYLES,
 } from '@scene/MaterialFactory'
+import type { IntersectionUniforms } from '@scene/MaterialFactory'
 import { createFresnelMaterial } from '@scene/FresnelMaterial'
 import type { FresnelUniforms } from '@scene/FresnelMaterial'
 
@@ -175,6 +176,7 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
   let fresnelMesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial> | null = null
   let particlePoints: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null = null
   let fresnelUniforms: FresnelUniforms | null = null
+  let intersectionUniforms: IntersectionUniforms | null = null
 
   // Scene refs
   let group: THREE.Group | null = null
@@ -309,8 +311,9 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
 
       // Main mesh
       const envMap = cubeRenderTarget ? cubeRenderTarget.texture : undefined
-      const mainMat = createMainMaterial(style, envMap, [clippingPlane])
-      mainMesh = new THREE.Mesh(geo, mainMat)
+      const mainResult = createMainMaterial(style, envMap, [clippingPlane], true)
+      intersectionUniforms = mainResult.intersectionUniforms
+      mainMesh = new THREE.Mesh(geo, mainResult.material)
       group.add(mainMesh)
 
       // Get base HSL
