@@ -12,9 +12,8 @@ export interface SpotifyPlayer {
 }
 
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID as string
-// Spotify requires http:// for localhost (https://localhost is rejected as "insecure")
-// Register http://localhost:5173/callback in Spotify Dashboard
-const REDIRECT_URI = 'http://localhost:5173/callback'
+const REDIRECT_URI = (import.meta.env.VITE_SPOTIFY_REDIRECT_URI as string | undefined)
+  ?? `${window.location.origin}/callback`
 const SCOPES = 'streaming user-read-playback-state user-modify-playback-state'
 
 function generateRandomString(length: number): string {
@@ -202,6 +201,27 @@ export function createSpotifyPlayer(audioEngine: AudioEngine, bus: Bus): Spotify
           audioEngine.connectSpotify(capturedStream)
         }
       }, 1000)
+    })
+
+    p.addListener('not_ready', () => {
+      connected = false
+      bus.emit('error', { source: 'spotify', message: 'Spotify-Gerät nicht bereit' })
+    })
+
+    p.addListener('initialization_error', (data) => {
+      bus.emit('error', { source: 'spotify', message: `SDK Init-Fehler: ${String(data['message'] ?? '')}` })
+    })
+
+    p.addListener('authentication_error', (data) => {
+      bus.emit('error', { source: 'spotify', message: `Spotify Auth-Fehler: ${String(data['message'] ?? '')} — Bitte erneut verbinden` })
+    })
+
+    p.addListener('account_error', (data) => {
+      bus.emit('error', { source: 'spotify', message: `Kein Spotify Premium: ${String(data['message'] ?? '')}` })
+    })
+
+    p.addListener('playback_error', (data) => {
+      bus.emit('error', { source: 'spotify', message: `Wiedergabe-Fehler: ${String(data['message'] ?? '')}` })
     })
 
     p.addListener('player_state_changed', (state) => {

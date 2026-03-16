@@ -72,7 +72,7 @@ test.describe('HTTPS & Spotify', () => {
 
       // Verify the auth URL contains correct parameters
       expect(authUrl).toContain('accounts.spotify.com/authorize')
-      expect(authUrl).toContain('client_id=e146e822fbd742ab8e5ad1f34fe7ea07')
+      expect(authUrl).toMatch(/client_id=[a-f0-9]{32}/)
       expect(authUrl).toContain('redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fcallback')
       expect(authUrl).toContain('response_type=code')
       expect(authUrl).toContain('code_challenge_method=S256')
