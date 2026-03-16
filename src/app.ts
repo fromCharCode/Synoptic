@@ -56,6 +56,7 @@ import { createHalftonePass } from '@postfx/passes/HalftonePass'
 import { createEdgeDetectPass } from '@postfx/passes/EdgeDetectPass'
 import { createASCIIPass } from '@postfx/passes/ASCIIPass'
 import { createCRTPass } from '@postfx/passes/CRTPass'
+import { createDepthEdgePass } from '@postfx/passes/DepthEdgePass'
 
 import type { Destination, Patchbay, Visualizer, FXPass } from '@core/types'
 import type { Bus } from '@core/bus'
@@ -233,6 +234,8 @@ export function createApp(canvas: HTMLCanvasElement): App {
   fxChain.addPass(createEdgeDetectPass())
   fxChain.addPass(createASCIIPass())
   fxChain.addPass(createCRTPass())
+  const depthEdgePass = createDepthEdgePass()
+  fxChain.addPass(depthEdgePass)
 
   // Register FX params as patchbay destinations with readable labels and sub-categories
   const FX_GROUP_MAP: Record<string, string> = {
@@ -496,6 +499,25 @@ export function createApp(canvas: HTMLCanvasElement): App {
     }
   }
 
+  // ── Error toast notifications ──
+  function showToast(message: string): void {
+    const el = document.createElement('div')
+    el.textContent = message
+    el.style.cssText = [
+      'position:fixed', 'top:16px', 'left:50%', 'transform:translateX(-50%)',
+      'background:#c0392b', 'color:#fff', 'padding:8px 16px', 'border-radius:6px',
+      'font:13px/1.4 monospace', 'z-index:9999', 'max-width:480px', 'text-align:center',
+      'pointer-events:none', 'opacity:1', 'transition:opacity 0.4s',
+    ].join(';')
+    document.body.appendChild(el)
+    setTimeout(() => { el.style.opacity = '0' }, 4000)
+    setTimeout(() => { el.remove() }, 4500)
+  }
+
+  bus.on('error', ({ source, message }) => {
+    showToast(`[${source}] ${message}`)
+  })
+
   // ── Audio setup on connect ──
   bus.on('audio:connected', () => {
     if (!audioAnalyser) {
@@ -583,26 +605,23 @@ export function createApp(canvas: HTMLCanvasElement): App {
     // Sync style on scene manager
     styleId = state.style
 
-    // Apply color/material/scene params from Form Tab to sceneManager
+    // Apply scene params from Form Tab to sceneManager (always, with defaults)
     const vp = state.vizParams
-    if (vp['hueShift'] !== undefined || vp['saturation'] !== undefined || vp['brightness'] !== undefined) {
-      const hueShift = (vp['hueShift'] ?? 0) / 360
-      const satMult = (vp['saturation'] ?? 100) / 100
-      const brtMult = (vp['brightness'] ?? 100) / 100
-      const emissiveInt = (vp['emissiveInt'] ?? 50) / 100
-      const emissiveHue = (vp['emissiveHue'] ?? 0) / 360
-      const fresnelStr = (vp['fresnelStrength'] ?? 60) / 100
-      const fresnelHue = (vp['fresnelHue'] ?? 0) / 360
-      const metalness = (vp['metalness'] ?? 10) / 100
-      const roughness = (vp['roughness'] ?? 5) / 100
-      const opacity = (vp['opacity'] ?? 100) / 100
+    {
       const fogDensity = (vp['fogDensity'] ?? 15) / 1000
       const camDist = (vp['camDistance'] ?? 80) / 10
-      const exposure = (vp['exposure'] ?? 130) / 100
-      const bgHueVal = (vp['bgHue'] ?? 0) / 360
+      // exposure slider: 200 = 2.0 (neutral). SceneManager.update() adds patchbay modulation on top.
+      const exposureBase = (vp['exposure'] ?? 200) / 100
+      const ambientInt = (vp['ambientInt'] ?? 100) / 100
+      const keyLightInt = (vp['keyLightInt'] ?? 100) / 100
+      const fillLightInt = (vp['fillLightInt'] ?? 100) / 100
 
-      // Apply to scene directly (these are base values, patchbay adds modulation on top)
-      sceneManager.renderer.toneMappingExposure = exposure
+      sceneManager.setExposureBase(exposureBase)
+      sceneManager.setCamDistance(camDist)
+      sceneManager.setAmbientBase(6.0 * ambientInt)
+      sceneManager.setKeyLightBase(8.0 * keyLightInt)
+      sceneManager.setFillLightBase(3.0 * fillLightInt)
+
       const fog = sceneManager.scene.fog
       if (fog && 'density' in fog) {
         (fog as { density: number }).density = fogDensity
@@ -711,14 +730,28 @@ export function createApp(canvas: HTMLCanvasElement): App {
       signals['loudness'] = analysis.loudness
       signals['bassRatio'] = analysis.bassRatio
 
-      // Beat pulse for spectrum ring
-      if (analysis.beat > 0.5) beatPulse = 1
+      // Beat pulse for spectrum ring + beat light flash
+      if (analysis.beat > 0.5) {
+        beatPulse = 1
+        sceneManager.lights.beat.intensity = 12.0
+        sceneManager.lights.beat.color.setHSL(Math.random(), 0.7, 0.6)
+        sceneManager.lights.beat.position.set(
+          (Math.random() - 0.5) * 6,
+          (Math.random() - 0.5) * 6,
+          (Math.random() - 0.5) * 6 + 4,
+        )
+      }
     }
     beatPulse *= 0.92
 
     // Apply drag rotation into the kGroup
     sceneManager.kGroup.rotation.y += (targetRotY - sceneManager.kGroup.rotation.y) * 0.08
     sceneManager.kGroup.rotation.x += (targetRotX - sceneManager.kGroup.rotation.x) * 0.08
+
+    // Periodic cube map update for env reflections (every ~2s)
+    if (clock.frame % 120 === 0) {
+      sceneManager.updateCubeMap()
+    }
 
     // Patchbay
     patchbay.update(signals, dt)
@@ -738,6 +771,13 @@ export function createApp(canvas: HTMLCanvasElement): App {
 
     // Scene
     sceneManager.update(dt, patchbay, mouseX, mouseY, styleId)
+
+    // Update DepthEdge pass depth texture + camera
+    if (depthEdgePass.extraUniforms) {
+      depthEdgePass.extraUniforms['tDepth']!.value = sceneManager.renderTarget.depthTexture
+      depthEdgePass.extraUniforms['cameraNear']!.value = sceneManager.camera.near
+      depthEdgePass.extraUniforms['cameraFar']!.value = sceneManager.camera.far
+    }
 
     // Render with FX chain — route 2D visualizers through their own scene/camera
     const vizWith2D = activeVisualizer as Visualizer & { __scene?: THREE.Scene; __camera?: THREE.Camera }
