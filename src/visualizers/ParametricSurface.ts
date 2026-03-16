@@ -108,6 +108,17 @@ const DESTINATIONS: Destination[] = [
   { id: 'rou', label: 'Roughness', group: 'Material', defaultSource: 'none', defaultAmount: 0, min: -0.3, max: 0.5, colorIndex: 5 },
   { id: 'opa', label: 'Opacity', group: 'Material', defaultSource: 'none', defaultAmount: 0, min: -0.5, max: 0.5, colorIndex: 5 },
   { id: 'wireOpa', label: 'Wire Opacity', group: 'Material', defaultSource: 'none', defaultAmount: 0, min: -0.3, max: 0.5, colorIndex: 5 },
+  // Intersection FX
+  { id: 'fInv', label: 'Fresnel Invert', group: 'Material', defaultSource: 'none', defaultAmount: 0, min: 0, max: 1, colorIndex: 5 },
+  { id: 'bfInt', label: 'Backface Int.', group: 'Material', defaultSource: 'none', defaultAmount: 0, min: 0, max: 1, colorIndex: 5 },
+  { id: 'bfHue', label: 'Backface Hue', group: 'Material', defaultSource: 'none', defaultAmount: 0, min: 0, max: 1, colorIndex: 5 },
+  { id: 'sgInt', label: 'Stencil Glow Int.', group: 'Material', defaultSource: 'none', defaultAmount: 0, min: 0, max: 1, colorIndex: 5 },
+  { id: 'sgHue', label: 'Stencil Glow Hue', group: 'Material', defaultSource: 'none', defaultAmount: 0, min: 0, max: 1, colorIndex: 5 },
+  // Particles
+  { id: 'pSpr', label: 'Particle Spread', group: 'Particles', defaultSource: 'none', defaultAmount: 0, min: 0, max: 0.4, colorIndex: 5 },
+  { id: 'pOpa', label: 'Particle Opacity', group: 'Particles', defaultSource: 'none', defaultAmount: 0, min: -0.5, max: 0.5, colorIndex: 5 },
+  { id: 'pSpd', label: 'Particle Speed', group: 'Particles', defaultSource: 'none', defaultAmount: 0, min: -1, max: 1, colorIndex: 5 },
+  { id: 'pBrt', label: 'Particle Glow', group: 'Particles', defaultSource: 'none', defaultAmount: 0, min: 0, max: 1, colorIndex: 5 },
 ]
 
 // ── Params + Toggles ──
@@ -116,6 +127,11 @@ const PARAMS: VisualizerParam[] = [
   { id: 'segU', label: 'Seg U', type: 'slider', min: 20, max: 180, default: 90, group: 'Geometrie' },
   { id: 'segV', label: 'Seg V', type: 'slider', min: 12, max: 90, default: 45, group: 'Geometrie' },
   { id: 'scale', label: 'Scale', type: 'slider', min: 20, max: 150, default: 70, group: 'Geometrie' },
+  // Particle controls
+  { id: 'particleSize', label: 'Größe', type: 'slider', min: 1, max: 100, default: 30, group: 'Partikel' },
+  { id: 'particleSpeed', label: 'Tempo', type: 'slider', min: 0, max: 100, default: 30, group: 'Partikel' },
+  { id: 'particleSpread', label: 'Streuung', type: 'slider', min: 0, max: 100, default: 20, group: 'Partikel' },
+  { id: 'particleOpacity', label: 'Opazität', type: 'slider', min: 0, max: 100, default: 80, group: 'Partikel' },
   { id: 'rotation', label: 'Rotation', type: 'slider', min: 0, max: 100, default: 25, group: 'Geometrie' },
 ]
 
@@ -127,6 +143,9 @@ const TOGGLES: VisualizerToggle[] = [
   { id: 'clipPlane', label: 'Clip Plane', default: false },
   { id: 'innerSide', label: 'Inner Side', default: false },
   { id: 'fresnelGlow', label: 'Fresnel Glow', default: true },
+  { id: 'fresnelInvert', label: 'Fresnel Inversion', default: false },
+  { id: 'backfaceEmissive', label: 'Backface Emissive', default: false },
+  { id: 'stencilGlow', label: 'Stencil Glow', default: false },
   { id: 'spectrumRing', label: 'Spectrum Ring', default: true },
 ]
 
@@ -172,6 +191,9 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
   let lastSegV = 0
   let lastTopology = 0
   let elapsed = 0
+
+  // Per-particle random phase offsets for staggered wave motion
+  let particlePhases: Float32Array | null = null
 
   function getStyle() {
     return STYLES[currentStyleId] ?? STYLES['glass']!
@@ -221,11 +243,11 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
       mainMesh.geometry.dispose()
       mainMesh.geometry = geo
     }
-    if (wireMesh && wireMesh.visible) {
+    if (wireMesh) {
       wireMesh.geometry.dispose()
       wireMesh.geometry = geo.clone()
     }
-    if (innerMesh && innerMesh.visible) {
+    if (innerMesh) {
       innerMesh.geometry.dispose()
       innerMesh.geometry = geo.clone()
     }
@@ -233,7 +255,7 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
       fresnelMesh.geometry.dispose()
       fresnelMesh.geometry = geo.clone()
     }
-    if (particlePoints && particlePoints.visible) {
+    if (particlePoints) {
       particlePoints.geometry.dispose()
       particlePoints.geometry = geo.clone()
     }
@@ -273,7 +295,7 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
         }
       }
 
-      clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+      clippingPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 100)
 
       const style = getStyle()
       const segU = paramValues['segU'] ?? 90
@@ -470,6 +492,7 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
       const formRoughness = (paramValues['roughness'] ?? 5) / 100
       const formOpacity = (paramValues['opacity'] ?? 100) / 100
 
+      const style = getStyle()
       const mat = mainMesh.material
       let h = baseHSL.h + formHueShift + patchbay.get('hue')
       if (h > 1) h -= Math.floor(h)
@@ -484,12 +507,12 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
       if (eh > 1) eh -= Math.floor(eh)
       if (eh < 0) eh += Math.ceil(-eh)
       mat.emissive.setHSL(eh, Math.max(0, baseEmissiveHSL.s), Math.max(0, baseEmissiveHSL.l))
-
-      const style = getStyle()
       mat.emissiveIntensity = style.emissiveIntensity * formEmissiveInt * 2 + patchbay.get('eI')
       mat.metalness = Math.max(0, Math.min(1, formMetalness + patchbay.get('met')))
       mat.roughness = Math.max(0.01, Math.min(1, formRoughness + patchbay.get('rou')))
-      mat.opacity = Math.max(0.05, Math.min(1, formOpacity + patchbay.get('opa')))
+      // formOpacity is a multiplier on the style's base opacity (100 = style default, 200 = fully opaque)
+      mat.opacity = Math.max(0.05, Math.min(1, style.opacity * formOpacity + patchbay.get('opa')))
+      mat.transparent = mat.opacity < 0.99
 
       // Wire opacity modulation
       if (wireMesh && wireMesh.visible) {
@@ -506,18 +529,85 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
         if (fh > 1) fh -= Math.floor(fh)
         if (fh < 0) fh += Math.ceil(-fh)
         fresnelUniforms.color.value.setHSL(fh, _fHsl.s, _fHsl.l)
+
+        // Fresnel inversion at folds
+        fresnelUniforms.invertAtFold.value = toggleValues['fresnelInvert']
+          ? Math.max(0.01, patchbay.get('fInv'))
+          : 0
       }
 
       // ── Clip plane ──
-      if (clippingPlane && toggleValues['clipPlane']) {
-        const clS = 1 + patchbay.get('clS')
-        clippingPlane.constant = Math.sin(elapsed * 0.8 * clS) * 2
+      if (clippingPlane) {
+        if (toggleValues['clipPlane']) {
+          const clS = 1 + patchbay.get('clS')
+          clippingPlane.constant = Math.sin(elapsed * 0.8 * clS) * 2
+        } else {
+          clippingPlane.constant = 100
+        }
       }
 
       // ── Particles ──
-      if (particlePoints && particlePoints.visible) {
-        particlePoints.material.size = 0.03 + patchbay.get('pSz')
-        particlePoints.rotation.y = elapsed * 0.1
+      if (particlePoints && particlePoints.visible && mainMesh) {
+        const pSize = Math.max(0, (paramValues['particleSize'] ?? 30) / 1000)
+        const pSpeed = (paramValues['particleSpeed'] ?? 30) / 100
+        const pSpread = (paramValues['particleSpread'] ?? 20) / 100 * 0.4
+        const pOpa = (paramValues['particleOpacity'] ?? 80) / 100
+
+        const pSzMod = patchbay.get('pSz')
+        const pSprMod = patchbay.get('pSpr')
+        const pOpaMod = patchbay.get('pOpa')
+        const pSpdMod = patchbay.get('pSpd')
+        const pBrtMod = patchbay.get('pBrt')
+
+        const effectiveSpeed = Math.max(0, pSpeed + pSpdMod)
+        const effectiveSpread = Math.max(0, pSpread + pSprMod)
+        const effectiveSize = Math.max(0.003, pSize + pSzMod)
+        const effectiveOpa = Math.max(0, Math.min(1, pOpa + pOpaMod))
+
+        const meshPos = mainMesh.geometry.getAttribute('position') as THREE.BufferAttribute
+        const meshNorm = mainMesh.geometry.getAttribute('normal') as THREE.BufferAttribute
+        const partPos = particlePoints.geometry.getAttribute('position') as THREE.BufferAttribute
+
+        // Lazily init / resize phase array when vertex count changes
+        if (!particlePhases || particlePhases.length !== meshPos.count) {
+          particlePhases = new Float32Array(meshPos.count)
+          for (let i = 0; i < particlePhases.length; i++) {
+            particlePhases[i] = Math.random() * Math.PI * 2
+          }
+        }
+
+        // Scatter each particle along its surface normal with individual phase
+        const count = Math.min(meshPos.count, partPos.count)
+        for (let i = 0; i < count; i++) {
+          const phase = particlePhases[i] ?? 0
+          // Each particle oscillates outward 0..1 independently
+          const wave = (Math.sin(elapsed * effectiveSpeed * 3 + phase) + 1) * 0.5
+          const scatter = effectiveSpread * wave
+          partPos.setXYZ(
+            i,
+            meshPos.getX(i) + meshNorm.getX(i) * scatter,
+            meshPos.getY(i) + meshNorm.getY(i) * scatter,
+            meshPos.getZ(i) + meshNorm.getZ(i) * scatter,
+          )
+        }
+        partPos.needsUpdate = true
+
+        particlePoints.material.size = effectiveSize
+        particlePoints.material.opacity = effectiveOpa
+
+        // Glow / brightness mod (e.g. patch energy → pBrt for pulse)
+        if (pBrtMod > 0.001) {
+          _color.set(getStyle().wireColor).getHSL(_fHsl)
+          particlePoints.material.color.setHSL(
+            _fHsl.h,
+            _fHsl.s,
+            Math.min(1, _fHsl.l + pBrtMod * 0.5),
+          )
+        }
+
+        // Slow independent counter-rotation gives orbit-like feel
+        particlePoints.rotation.y = elapsed * effectiveSpeed * 0.15
+        particlePoints.rotation.x = Math.sin(elapsed * effectiveSpeed * 0.1) * 0.15
       }
 
       // ── Toggle visibility sync ──
@@ -555,6 +645,7 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
       fresnelMesh = null
       particlePoints = null
       fresnelUniforms = null
+      particlePhases = null
       group = null
     },
 

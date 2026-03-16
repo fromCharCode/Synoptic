@@ -53,9 +53,20 @@ export interface SynoptikActions {
 const DEFAULT_STATE: SynoptikState = {
   activeVisualizer: 'parametricSurface',
   vizParams: { topology: 0, segU: 90, segV: 45, scale: 70, rotation: 25 },
-  vizToggles: { wireframe: false, autoRotation: true, pulsation: true, particles: false, clipPlane: false, innerSide: false, fresnelGlow: true, spectrumRing: true },
+  vizToggles: { wireframe: false, autoRotation: true, pulsation: true, particles: false, clipPlane: false, innerSide: false, fresnelGlow: true, spectrumRing: true, fresnelInvert: false, backfaceEmissive: false, stencilGlow: false },
   style: 'glass',
-  patches: {},
+  patches: {
+    // Default audio-reactive patches — mirrors the prototype's factory defaults
+    dB:   { source: 'bass',   amount: 15, curve: 'linear', lag: 0 },
+    dM:   { source: 'mid',    amount: 12, curve: 'linear', lag: 0 },
+    dH:   { source: 'high',   amount: 10, curve: 'linear', lag: 0 },
+    eI:   { source: 'energy', amount: 40, curve: 'linear', lag: 0 },
+    exp:  { source: 'bass',   amount: 20, curve: 'linear', lag: 0 },
+    fStr: { source: 'bass',   amount: 30, curve: 'linear', lag: 0 },
+    cShk: { source: 'beat',   amount: 50, curve: 'linear', lag: 0 },
+    pSpr: { source: 'beat',   amount: 60, curve: 'linear', lag: 0 },
+    pBrt: { source: 'energy', amount: 40, curve: 'linear', lag: 0 },
+  },
   lfos: [
     { rate: 0.5, waveform: 'sin', depth: 1, phaseOffset: 0, retriggerOnBeat: false },
     { rate: 0.2, waveform: 'tri', depth: 1, phaseOffset: 0, retriggerOnBeat: false },
