@@ -245,6 +245,7 @@ export function createApp(canvas: HTMLCanvasElement): App {
     dof: 'FX: Optical', lensdist: 'FX: Optical', anamorphic: 'FX: Optical', kaleidoscope: 'FX: Optical', mirror: 'FX: Optical',
     colorgrade: 'FX: Color', invert: 'FX: Color', duotone: 'FX: Color', huerotate: 'FX: Color', monochrome: 'FX: Color',
     halftone: 'FX: Style', edge: 'FX: Style', ascii: 'FX: Style', crt: 'FX: Style',
+    depthEdge: 'FX: Style',
   }
 
   function makeFXDestLabel(passLabel: string, paramLabel: string): string {
