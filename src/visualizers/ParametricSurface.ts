@@ -539,6 +539,37 @@ export function createParametricSurface(): ParametricSurfaceVisualizer {
           : 0
       }
 
+      // ── Intersection FX uniforms ──
+      if (intersectionUniforms) {
+        // Backface emissive
+        const bfActive = toggleValues['backfaceEmissive']
+        intersectionUniforms.backfaceIntensity.value = bfActive
+          ? Math.max(0.3, patchbay.get('bfInt') * 2.0)
+          : 0
+
+        if (bfActive) {
+          const bfHue = patchbay.get('bfHue')
+          if (Math.abs(bfHue) > 0.001) {
+            intersectionUniforms.backfaceColor.value
+              .set(style.wireColor).offsetHSL(0.5 + bfHue, 0, 0)
+          }
+        }
+
+        // Stencil glow
+        const sgActive = toggleValues['stencilGlow']
+        intersectionUniforms.stencilIntensity.value = sgActive
+          ? Math.max(0.3, patchbay.get('sgInt') * 2.0)
+          : 0
+
+        if (sgActive) {
+          const sgHue = patchbay.get('sgHue')
+          if (Math.abs(sgHue) > 0.001) {
+            intersectionUniforms.stencilGlowColor.value
+              .set(style.wireColor).offsetHSL(sgHue, 0, 0)
+          }
+        }
+      }
+
       // ── Clip plane ──
       if (clippingPlane) {
         if (toggleValues['clipPlane']) {
