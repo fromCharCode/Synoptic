@@ -100,4 +100,4 @@ Wenn das YouTube IFrame API Script nicht laden kann, wird die Promise-Rejection 
 
 ## Lizenz
 
-Privat — keine Nutzung ohne Genehmigung.
+[MIT](LICENSE)
