@@ -7,11 +7,14 @@ export interface AudioEngine {
   readonly analyserNode: AnalyserNode
   readonly mode: AudioMode
   readonly isActive: boolean
+  readonly isPaused: boolean
   connectMic(): Promise<void>
   connectTabCapture(): Promise<void>
   connectFile(file: File): Promise<void>
   connectSpotify(stream: MediaStream): void
   disconnect(): void
+  pause(): void
+  resume(): void
 }
 
 export function createAudioEngine(bus: Bus): AudioEngine {
@@ -21,6 +24,7 @@ export function createAudioEngine(bus: Bus): AudioEngine {
   let stream: MediaStream | null = null
   let audioElement: HTMLAudioElement | null = null
   let mode: AudioMode = null
+  let paused = false
 
   function ensureContext(): { ctx: AudioContext; analyser: AnalyserNode } {
     if (!ctx) {
@@ -33,6 +37,7 @@ export function createAudioEngine(bus: Bus): AudioEngine {
   }
 
   function cleanupSource() {
+    paused = false
     if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null }
     if (audioElement) { audioElement.pause(); audioElement.src = ''; audioElement = null }
     if (source) { try { source.disconnect() } catch { /* ignore */ } source = null }
@@ -44,6 +49,7 @@ export function createAudioEngine(bus: Bus): AudioEngine {
     get analyserNode() { return ensureContext().analyser },
     get mode() { return mode },
     get isActive() { return mode !== null },
+    get isPaused() { return paused },
 
     async connectMic() {
       const { ctx: c, analyser: a } = ensureContext()
@@ -111,6 +117,26 @@ export function createAudioEngine(bus: Bus): AudioEngine {
       cleanupSource()
       mode = null
       bus.emit('audio:disconnected', undefined as void)
+    },
+
+    pause() {
+      if (!mode || paused) return
+      paused = true
+      if (audioElement) {
+        audioElement.pause()
+      } else {
+        void ctx?.suspend()
+      }
+    },
+
+    resume() {
+      if (!mode || !paused) return
+      paused = false
+      if (audioElement) {
+        void audioElement.play()
+      } else {
+        void ctx?.resume()
+      }
     },
   }
 
